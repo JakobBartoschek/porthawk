@@ -9,7 +9,6 @@ import ipaddress
 import socket
 import time
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, field_validator
 from tqdm.asyncio import tqdm as async_tqdm
@@ -28,12 +27,12 @@ class ScanResult(BaseModel):
     port: int
     protocol: str  # "tcp" or "udp"
     state: PortState
-    banner: Optional[str] = None
-    service_name: Optional[str] = None
-    risk_level: Optional[str] = None
-    os_guess: Optional[str] = None
-    ttl: Optional[int] = None
-    latency_ms: Optional[float] = None
+    banner: str | None = None
+    service_name: str | None = None
+    risk_level: str | None = None
+    os_guess: str | None = None
+    ttl: int | None = None
+    latency_ms: float | None = None
 
     @field_validator("port")
     @classmethod
@@ -105,7 +104,7 @@ def _udp_probe_sync(host: str, port: int, timeout: float) -> PortState:
             sock.sendto(b"\x00", (host, port))  # empty byte triggers ICMP faster than nothing
             sock.recvfrom(1024)
             return PortState.OPEN
-        except socket.timeout:
+        except TimeoutError:
             return PortState.FILTERED
         except ConnectionResetError:
             # Windows ICMP unreachable shows up as this

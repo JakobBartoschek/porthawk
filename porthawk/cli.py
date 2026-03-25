@@ -38,20 +38,42 @@ def version_callback(value: bool) -> None:
 
 @app.command()
 def scan(
-    target: Annotated[str, typer.Option("--target", "-t", help="Target IP, hostname, or CIDR (e.g. 192.168.1.0/24)")],
-    ports: Annotated[str | None, typer.Option("--ports", "-p", help="Port range: '1-1024', '22,80,443', or 'common'")] = None,
-    top_ports: Annotated[int | None, typer.Option("--top-ports", help="Scan top N most common ports")] = None,
+    target: Annotated[
+        str,
+        typer.Option("--target", "-t", help="Target IP, hostname, or CIDR (e.g. 192.168.1.0/24)"),
+    ],
+    ports: Annotated[
+        str | None,
+        typer.Option("--ports", "-p", help="Port range: '1-1024', '22,80,443', or 'common'"),
+    ] = None,
+    top_ports: Annotated[
+        int | None, typer.Option("--top-ports", help="Scan top N most common ports")
+    ] = None,
     full: Annotated[bool, typer.Option("--full", help="Scan all 65535 ports (slow)")] = False,
     common: Annotated[bool, typer.Option("--common", help="Scan top 100 common ports")] = False,
-    stealth: Annotated[bool, typer.Option("--stealth", help="Slow scan mode: 1 thread, 3s timeout")] = False,
+    stealth: Annotated[
+        bool, typer.Option("--stealth", help="Slow scan mode: 1 thread, 3s timeout")
+    ] = False,
     udp: Annotated[bool, typer.Option("--udp", help="UDP scan (requires root/admin)")] = False,
     os_detect: Annotated[bool, typer.Option("--os", help="Attempt OS detection via TTL")] = False,
-    banners: Annotated[bool, typer.Option("--banners", help="Grab service banners from open ports")] = False,
-    timeout: Annotated[float, typer.Option("--timeout", help="Connection timeout in seconds")] = 1.0,
+    banners: Annotated[
+        bool, typer.Option("--banners", help="Grab service banners from open ports")
+    ] = False,
+    timeout: Annotated[
+        float, typer.Option("--timeout", help="Connection timeout in seconds")
+    ] = 1.0,
     threads: Annotated[int, typer.Option("--threads", help="Max concurrent connections")] = 500,
-    output: Annotated[str | None, typer.Option("--output", "-o", help="Output formats: json,csv,html (comma-separated)")] = None,
-    show_closed: Annotated[bool, typer.Option("--show-closed", help="Show closed and filtered ports in terminal output")] = False,
-    version: Annotated[bool | None, typer.Option("--version", callback=version_callback, is_eager=True)] = None,
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output formats: json,csv,html (comma-separated)"),
+    ] = None,
+    show_closed: Annotated[
+        bool,
+        typer.Option("--show-closed", help="Show closed and filtered ports in terminal output"),
+    ] = False,
+    version: Annotated[
+        bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
+    ] = None,
 ) -> None:
     """Scan a target host or network for open ports.
 
@@ -81,9 +103,7 @@ def scan(
     )
 
     try:
-        all_results = asyncio.run(
-            _run_scan(targets, port_list, timeout, threads, udp)
-        )
+        all_results = asyncio.run(_run_scan(targets, port_list, timeout, threads, udp))
     except PermissionError as exc:
         err_console.print(f"Permission error: {exc}")
         raise typer.Exit(code=1) from exc
@@ -95,7 +115,9 @@ def scan(
     flat_results = [r for host_results in all_results.values() for r in host_results]
 
     # Enrich open ports with service info, banners, OS guess
-    flat_results = _enrich_results(flat_results, host=targets[0], banners=banners, os_detect=os_detect, timeout=timeout)
+    flat_results = _enrich_results(
+        flat_results, host=targets[0], banners=banners, os_detect=os_detect, timeout=timeout
+    )
 
     report = build_report(
         target=target,
@@ -149,6 +171,7 @@ async def _run_scan(
 ) -> dict[str, list]:
     """Async wrapper — keeps the asyncio.run() call in main() clean."""
     from porthawk.scanner import scan_targets
+
     return await scan_targets(
         targets=targets,
         ports=port_list,

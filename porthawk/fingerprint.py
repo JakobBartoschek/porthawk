@@ -8,10 +8,8 @@ import asyncio
 import re
 import subprocess
 import sys
-from typing import Optional
 
 import httpx
-
 
 # TTL thresholds for OS guessing.
 # Initial TTL values: Linux/Unix=64, Windows=128, Cisco=255.
@@ -52,7 +50,7 @@ def guess_os_from_ttl(ttl: int) -> str:
     return "Unknown"
 
 
-def get_ttl_via_ping(host: str, timeout: float = 2.0) -> Optional[int]:
+def get_ttl_via_ping(host: str, timeout: float = 2.0) -> int | None:
     """Ping the host once and pull the TTL from the output.
 
     Uses subprocess because asyncio doesn't expose the IP TTL from TCP connections.
@@ -85,7 +83,7 @@ def get_ttl_via_ping(host: str, timeout: float = 2.0) -> Optional[int]:
         return None
 
 
-async def grab_banner(host: str, port: int, timeout: float = 2.0) -> Optional[str]:
+async def grab_banner(host: str, port: int, timeout: float = 2.0) -> str | None:
     """Connect and wait for a spontaneous banner (SSH, FTP, SMTP send one immediately).
 
     Sends a single null byte if the service doesn't speak first — enough to wake
@@ -120,7 +118,7 @@ async def grab_banner(host: str, port: int, timeout: float = 2.0) -> Optional[st
         return None
 
 
-async def grab_http_headers(host: str, port: int, timeout: float = 2.0) -> Optional[str]:
+async def grab_http_headers(host: str, port: int, timeout: float = 2.0) -> str | None:
     """HEAD request to pull Server, X-Powered-By, and other noisy headers.
 
     verify=False because self-signed certs on internal hosts are basically the rule, not exception.
@@ -143,9 +141,7 @@ async def grab_http_headers(host: str, port: int, timeout: float = 2.0) -> Optio
         async with httpx.AsyncClient(verify=False, timeout=timeout) as client:
             resp = await client.head(url, follow_redirects=True)
             interesting = {
-                k.lower(): v
-                for k, v in resp.headers.items()
-                if k.lower() in fingerprint_headers
+                k.lower(): v for k, v in resp.headers.items() if k.lower() in fingerprint_headers
             }
             if interesting:
                 return " | ".join(f"{k}: {v}" for k, v in interesting.items())
@@ -154,7 +150,7 @@ async def grab_http_headers(host: str, port: int, timeout: float = 2.0) -> Optio
         return None
 
 
-def extract_ssh_version(banner: str) -> Optional[str]:
+def extract_ssh_version(banner: str) -> str | None:
     """Pull the SSH software version out of a banner string.
 
     SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6 → OpenSSH_8.9p1
@@ -182,7 +178,7 @@ async def fingerprint_port(
     port: int,
     timeout: float = 2.0,
     grab_http: bool = True,
-) -> Optional[str]:
+) -> str | None:
     """Best-effort fingerprint of an open port. Tries HTTP first, then raw banner.
 
     For security tooling, the caller is responsible for deciding whether to fingerprint.

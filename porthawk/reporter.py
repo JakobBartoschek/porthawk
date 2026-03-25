@@ -5,19 +5,16 @@ reporter.py renders it. That boundary is intentional and should stay that way.
 """
 
 import csv
-import json
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from jinja2 import BaseLoader, Environment
 from pydantic import BaseModel
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
-from porthawk.scanner import ScanResult, PortState
+from porthawk.scanner import PortState, ScanResult
 from porthawk.service_db import RiskLevel
 
 _REPORTS_DIR = Path("reports")
@@ -292,8 +289,8 @@ def print_terminal(report: ScanReport, show_closed: bool = False) -> None:
 
     for result in display_results:
         state_color = _STATE_COLORS.get(result.state, "white")
-        risk_color = _RISK_COLORS.get(
-            RiskLevel(result.risk_level) if result.risk_level else None, "cyan"
+        risk_color = (
+            _RISK_COLORS.get(RiskLevel(result.risk_level), "cyan") if result.risk_level else "cyan"
         )
 
         table.add_row(
@@ -311,7 +308,7 @@ def print_terminal(report: ScanReport, show_closed: bool = False) -> None:
     )
 
 
-def save_json(report: ScanReport, output_path: Optional[Path] = None) -> Path:
+def save_json(report: ScanReport, output_path: Path | None = None) -> Path:
     """Dump the full ScanReport as pretty-printed JSON.
 
     Args:
@@ -333,7 +330,7 @@ def save_json(report: ScanReport, output_path: Optional[Path] = None) -> Path:
     return dest
 
 
-def save_csv(report: ScanReport, output_path: Optional[Path] = None) -> Path:
+def save_csv(report: ScanReport, output_path: Path | None = None) -> Path:
     """Flat CSV — one row per port. Importable into Splunk, Excel, or grep.
 
     Args:
@@ -348,28 +345,40 @@ def save_csv(report: ScanReport, output_path: Optional[Path] = None) -> Path:
     else:
         dest = output_path
 
-    fieldnames = ["host", "port", "protocol", "state", "service_name", "risk_level", "banner", "latency_ms", "os_guess"]
+    fieldnames = [
+        "host",
+        "port",
+        "protocol",
+        "state",
+        "service_name",
+        "risk_level",
+        "banner",
+        "latency_ms",
+        "os_guess",
+    ]
 
     with dest.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for r in sorted(report.results, key=lambda x: x.port):
-            writer.writerow({
-                "host": r.host,
-                "port": r.port,
-                "protocol": r.protocol,
-                "state": r.state,
-                "service_name": r.service_name or "",
-                "risk_level": r.risk_level or "",
-                "banner": r.banner or "",
-                "latency_ms": r.latency_ms or "",
-                "os_guess": r.os_guess or "",
-            })
+            writer.writerow(
+                {
+                    "host": r.host,
+                    "port": r.port,
+                    "protocol": r.protocol,
+                    "state": r.state,
+                    "service_name": r.service_name or "",
+                    "risk_level": r.risk_level or "",
+                    "banner": r.banner or "",
+                    "latency_ms": r.latency_ms or "",
+                    "os_guess": r.os_guess or "",
+                }
+            )
 
     return dest
 
 
-def save_html(report: ScanReport, output_path: Optional[Path] = None) -> Path:
+def save_html(report: ScanReport, output_path: Path | None = None) -> Path:
     """Render the full report as a self-contained HTML file with sortable table.
 
     Uses the embedded Jinja2 template — no external template files needed.

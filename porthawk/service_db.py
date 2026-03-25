@@ -5,7 +5,6 @@ Source: IANA service-names-port-numbers, filtered to ports that matter in practi
 """
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -24,71 +23,77 @@ class ServiceInfo(BaseModel):
     protocol: str
     service_name: str
     description: str
-    risk_level: Optional[RiskLevel] = None
+    risk_level: RiskLevel | None = None
 
 
 # Ports that are HIGH risk when open to the internet — no argument.
 # Telnet, SMB, RDP, old mail protocols — these are the hits in every pentest report.
-_HIGH_RISK_PORTS = frozenset({
-    21,    # FTP — cleartext auth, anonymous login disasters
-    23,    # Telnet — cleartext everything, should be dead
-    25,    # SMTP open relay — spammer paradise if misconfigured
-    53,    # DNS — zone transfer is HIGH, normal query is INFO
-    69,    # TFTP — no auth, unauthenticated file grab
-    110,   # POP3 — cleartext email auth
-    111,   # RPC portmapper — classic pivoting vector
-    119,   # NNTP — rarely needed, often forgotten
-    135,   # MSRPC — Windows exploitation starting point
-    137,   # NetBIOS Name Service — SMB recon
-    138,   # NetBIOS Datagram — SMB recon
-    139,   # NetBIOS Session — SMB without TLS
-    143,   # IMAP — cleartext mail auth
-    161,   # SNMP — community string auth is basically no auth
-    389,   # LDAP — cleartext directory queries
-    445,   # SMB — EternalBlue, WannaCry, every Windows exploit ever
-    512,   # rexec — no auth on old Unix
-    513,   # rlogin — no auth on old Unix
-    514,   # rsh — no auth, extremely old, shouldn't exist
-    1433,  # MSSQL — DB exposed to internet = bad day
-    1521,  # Oracle DB — same problem
-    2049,  # NFS — world-readable exports are a thing
-    3389,  # RDP — ransomware gangs love this port
-    4444,  # Metasploit default shell — something is wrong if this is open
-    5900,  # VNC — cleartext or weak auth depending on version
-    6379,  # Redis — no auth by default, RCE via config set
-    27017, # MongoDB — no auth by default (older versions), data breach classic
-})
+_HIGH_RISK_PORTS = frozenset(
+    {
+        21,  # FTP — cleartext auth, anonymous login disasters
+        23,  # Telnet — cleartext everything, should be dead
+        25,  # SMTP open relay — spammer paradise if misconfigured
+        53,  # DNS — zone transfer is HIGH, normal query is INFO
+        69,  # TFTP — no auth, unauthenticated file grab
+        110,  # POP3 — cleartext email auth
+        111,  # RPC portmapper — classic pivoting vector
+        119,  # NNTP — rarely needed, often forgotten
+        135,  # MSRPC — Windows exploitation starting point
+        137,  # NetBIOS Name Service — SMB recon
+        138,  # NetBIOS Datagram — SMB recon
+        139,  # NetBIOS Session — SMB without TLS
+        143,  # IMAP — cleartext mail auth
+        161,  # SNMP — community string auth is basically no auth
+        389,  # LDAP — cleartext directory queries
+        445,  # SMB — EternalBlue, WannaCry, every Windows exploit ever
+        512,  # rexec — no auth on old Unix
+        513,  # rlogin — no auth on old Unix
+        514,  # rsh — no auth, extremely old, shouldn't exist
+        1433,  # MSSQL — DB exposed to internet = bad day
+        1521,  # Oracle DB — same problem
+        2049,  # NFS — world-readable exports are a thing
+        3389,  # RDP — ransomware gangs love this port
+        4444,  # Metasploit default shell — something is wrong if this is open
+        5900,  # VNC — cleartext or weak auth depending on version
+        6379,  # Redis — no auth by default, RCE via config set
+        27017,  # MongoDB — no auth by default (older versions), data breach classic
+    }
+)
 
 # MEDIUM risk — legitimate services, but exposure to internet needs justification
-_MEDIUM_RISK_PORTS = frozenset({
-    22,    # SSH — secure but brute-forced constantly
-    3306,  # MySQL — should never be internet-facing
-    5432,  # PostgreSQL — same as MySQL
-    8080,  # HTTP alt — usually a dev server someone forgot to close
-    8443,  # HTTPS alt — fine for internal, suspicious on internet
-    1080,  # SOCKS proxy — might be an open proxy
-    3128,  # Squid proxy — might be an open proxy
-    5000,  # Flask/Docker — dev server exposed
-    5001,  # alt dev server port
-    8888,  # Jupyter Notebook — if this is open on internet, someone has a bad day
-    9200,  # Elasticsearch — another "no auth by default" classic
-    9300,  # Elasticsearch cluster — ditto
-    11211, # Memcached — no auth, UDP amplification DDoS vector
-    27018, # MongoDB shard — same auth issues as 27017
-    28017, # MongoDB web interface — definitely shouldn't be public
-})
+_MEDIUM_RISK_PORTS = frozenset(
+    {
+        22,  # SSH — secure but brute-forced constantly
+        3306,  # MySQL — should never be internet-facing
+        5432,  # PostgreSQL — same as MySQL
+        8080,  # HTTP alt — usually a dev server someone forgot to close
+        8443,  # HTTPS alt — fine for internal, suspicious on internet
+        1080,  # SOCKS proxy — might be an open proxy
+        3128,  # Squid proxy — might be an open proxy
+        5000,  # Flask/Docker — dev server exposed
+        5001,  # alt dev server port
+        8888,  # Jupyter Notebook — if this is open on internet, someone has a bad day
+        9200,  # Elasticsearch — another "no auth by default" classic
+        9300,  # Elasticsearch cluster — ditto
+        11211,  # Memcached — no auth, UDP amplification DDoS vector
+        27018,  # MongoDB shard — same auth issues as 27017
+        28017,  # MongoDB web interface — definitely shouldn't be public
+    }
+)
 
 # LOW risk — open and expected, not inherently dangerous
-_LOW_RISK_PORTS = frozenset({
-    80,    # HTTP — cleartext but ubiquitous; low risk, but redirect to HTTPS
-    443,   # HTTPS — expected, just make sure the cert is valid
-    465,   # SMTPS — encrypted SMTP
-    587,   # SMTP submission — email sending, auth required
-    993,   # IMAPS — encrypted IMAP
-    995,   # POP3S — encrypted POP3
-    8443,  # HTTPS alt — depending on context, could be MEDIUM
-    9443,  # HTTPS alt
-})
+_LOW_RISK_PORTS = frozenset(
+    {
+        80,  # HTTP — cleartext but ubiquitous; low risk, but redirect to HTTPS
+        443,  # HTTPS — expected, just make sure the cert is valid
+        465,  # SMTPS — encrypted SMTP
+        587,  # SMTP submission — email sending, auth required
+        993,  # IMAPS — encrypted IMAP
+        995,  # POP3S — encrypted POP3
+        8443,  # HTTPS alt — depending on context, could be MEDIUM
+        9443,  # HTTPS alt
+    }
+)
 
 # Main service database — top ~200 ports that show up in real-world scans.
 # (tcp, udp) tuples where the protocol matters. Single string = same for both.
@@ -164,7 +169,6 @@ _PORT_DB: dict[int, dict[str, str]] = {
     992: {"name": "telnets", "desc": "Telnet over TLS (yes, really)"},
     993: {"name": "imaps", "desc": "IMAP over TLS"},
     995: {"name": "pop3s", "desc": "POP3 over TLS"},
-
     # Registered ports (1024–49151)
     1080: {"name": "socks", "desc": "SOCKS Proxy — check for open proxy"},
     1194: {"name": "openvpn", "desc": "OpenVPN"},
@@ -249,7 +253,7 @@ _PORT_DB: dict[int, dict[str, str]] = {
 }
 
 
-def _determine_risk(port: int) -> Optional[RiskLevel]:
+def _determine_risk(port: int) -> RiskLevel | None:
     """Map a port number to its risk level. Returns None for unknown ports."""
     if port in _HIGH_RISK_PORTS:
         return RiskLevel.HIGH
@@ -307,16 +311,106 @@ def get_top_ports(n: int) -> list[int]:
     """
     # Ordered by scan priority — common services and frequent vuln targets first
     top_ports = [
-        80, 443, 22, 21, 25, 3389, 110, 445, 139, 143,
-        53, 135, 3306, 8080, 1723, 111, 995, 993, 587, 23,
-        8443, 8888, 6379, 27017, 5432, 1433, 5900, 2049, 389, 161,
-        3128, 1080, 5000, 8000, 9200, 11211, 2375, 10250, 9092, 2181,
-        6443, 5672, 5601, 9090, 4444, 9300, 27018, 7001, 9000, 9042,
-        4848, 8161, 15672, 61616, 50000, 50070, 28017, 27019, 16379, 10000,
-        8081, 8088, 8089, 7000, 7474, 9418, 9001, 5061, 5060, 5001,
-        4500, 4243, 4000, 3690, 3260, 2380, 2379, 2376, 2222, 2121,
-        2087, 2086, 2083, 2082, 1900, 1883, 1521, 1434, 1194, 1027,
-        902, 873, 749, 694, 646, 636, 631, 544, 543, 540,
+        80,
+        443,
+        22,
+        21,
+        25,
+        3389,
+        110,
+        445,
+        139,
+        143,
+        53,
+        135,
+        3306,
+        8080,
+        1723,
+        111,
+        995,
+        993,
+        587,
+        23,
+        8443,
+        8888,
+        6379,
+        27017,
+        5432,
+        1433,
+        5900,
+        2049,
+        389,
+        161,
+        3128,
+        1080,
+        5000,
+        8000,
+        9200,
+        11211,
+        2375,
+        10250,
+        9092,
+        2181,
+        6443,
+        5672,
+        5601,
+        9090,
+        4444,
+        9300,
+        27018,
+        7001,
+        9000,
+        9042,
+        4848,
+        8161,
+        15672,
+        61616,
+        50000,
+        50070,
+        28017,
+        27019,
+        16379,
+        10000,
+        8081,
+        8088,
+        8089,
+        7000,
+        7474,
+        9418,
+        9001,
+        5061,
+        5060,
+        5001,
+        4500,
+        4243,
+        4000,
+        3690,
+        3260,
+        2380,
+        2379,
+        2376,
+        2222,
+        2121,
+        2087,
+        2086,
+        2083,
+        2082,
+        1900,
+        1883,
+        1521,
+        1434,
+        1194,
+        1027,
+        902,
+        873,
+        749,
+        694,
+        646,
+        636,
+        631,
+        544,
+        543,
+        540,
     ]
     # Pad with remaining _PORT_DB keys if we need more than the priority list covers
     remaining = [p for p in sorted(_PORT_DB.keys()) if p not in top_ports]
