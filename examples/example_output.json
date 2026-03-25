@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "target": "192.168.1.100",
+    "scan_time": "2026-03-25T14:30:00",
+    "total_ports": 100,
+    "open_ports": 6,
+    "protocol": "tcp",
+    "version": "0.1.0",
+    "timeout": 1.0,
+    "max_concurrent": 500
+  },
+  "results": [
+    {
+      "host": "192.168.1.100",
+      "port": 22,
+      "protocol": "tcp",
+      "state": "open",
+      "banner": "SSH OpenSSH_8.9p1",
+      "service_name": "ssh",
+      "risk_level": "MEDIUM",
+      "os_guess": "Linux/Unix",
+      "ttl": 64,
+      "latency_ms": 0.8
+    },
+    {
+      "host": "192.168.1.100",
+      "port": 80,
+      "protocol": "tcp",
+      "state": "open",
+      "banner": "server: nginx/1.24.0",
+      "service_name": "http",
+      "risk_level": "LOW",
+      "os_guess": "Linux/Unix",
+      "ttl": 64,
+      "latency_ms": 1.2
+    },
+    {
+      "host": "192.168.1.100",
+      "port": 443,
+      "protocol": "tcp",
+      "state": "open",
+      "banner": "HTTP 200",
+      "service_name": "https",
+      "risk_level": "LOW",
+      "os_guess": "Linux/Unix",
+      "ttl": 64,
+      "latency_ms": 1.5
+    },
+    {
+      "host": "192.168.1.100",
+      "port": 3306,
+      "protocol": "tcp",
+      "state": "open",
+      "banner": null,
+      "service_name": "mysql",
+      "risk_level": "MEDIUM",
+      "os_guess": "Linux/Unix",
+      "ttl": 64,
+      "latency_ms": 0.9
+    },
+    {
+      "host": "192.168.1.100",
+      "port": 6379,
+      "protocol": "tcp",
+      "state": "open",
+      "banner": "+PONG\r\n",
+      "service_name": "redis",
+      "risk_level": "HIGH",
+      "os_guess": "Linux/Unix",
+      "ttl": 64,
+      "latency_ms": 0.7
+    },
+    {
+      "host": "192.168.1.100",
+      "port": 27017,
+      "protocol": "tcp",
+      "state": "open",
+      "banner": null,
+      "service_name": "mongodb",
+      "risk_level": "HIGH",
+      "os_guess": "Linux/Unix",
+      "ttl": 64,
+      "latency_ms": 1.1
+    }
+  ]
+}
