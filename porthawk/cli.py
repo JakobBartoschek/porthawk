@@ -5,9 +5,7 @@ If this file grows past 200 lines, split it.
 """
 
 import asyncio
-import sys
-from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -15,7 +13,7 @@ from rich.console import Console
 from porthawk import __version__
 from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_from_ttl
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
-from porthawk.scanner import PortState, expand_cidr, parse_port_range, scan_host
+from porthawk.scanner import PortState, expand_cidr, parse_port_range
 from porthawk.service_db import get_service, get_top_ports
 
 app = typer.Typer(
@@ -41,8 +39,8 @@ def version_callback(value: bool) -> None:
 @app.command()
 def scan(
     target: Annotated[str, typer.Option("--target", "-t", help="Target IP, hostname, or CIDR (e.g. 192.168.1.0/24)")],
-    ports: Annotated[Optional[str], typer.Option("--ports", "-p", help="Port range: '1-1024', '22,80,443', or 'common'")] = None,
-    top_ports: Annotated[Optional[int], typer.Option("--top-ports", help="Scan top N most common ports")] = None,
+    ports: Annotated[str | None, typer.Option("--ports", "-p", help="Port range: '1-1024', '22,80,443', or 'common'")] = None,
+    top_ports: Annotated[int | None, typer.Option("--top-ports", help="Scan top N most common ports")] = None,
     full: Annotated[bool, typer.Option("--full", help="Scan all 65535 ports (slow)")] = False,
     common: Annotated[bool, typer.Option("--common", help="Scan top 100 common ports")] = False,
     stealth: Annotated[bool, typer.Option("--stealth", help="Slow scan mode: 1 thread, 3s timeout")] = False,
@@ -51,9 +49,9 @@ def scan(
     banners: Annotated[bool, typer.Option("--banners", help="Grab service banners from open ports")] = False,
     timeout: Annotated[float, typer.Option("--timeout", help="Connection timeout in seconds")] = 1.0,
     threads: Annotated[int, typer.Option("--threads", help="Max concurrent connections")] = 500,
-    output: Annotated[Optional[str], typer.Option("--output", "-o", help="Output formats: json,csv,html (comma-separated)")] = None,
+    output: Annotated[str | None, typer.Option("--output", "-o", help="Output formats: json,csv,html (comma-separated)")] = None,
     show_closed: Annotated[bool, typer.Option("--show-closed", help="Show closed and filtered ports in terminal output")] = False,
-    version: Annotated[Optional[bool], typer.Option("--version", callback=version_callback, is_eager=True)] = None,
+    version: Annotated[bool | None, typer.Option("--version", callback=version_callback, is_eager=True)] = None,
 ) -> None:
     """Scan a target host or network for open ports.
 
@@ -91,7 +89,7 @@ def scan(
         raise typer.Exit(code=1) from exc
     except KeyboardInterrupt:
         console.print("\n[yellow]Scan interrupted by user[/yellow]")
-        raise typer.Exit(code=0)
+        raise typer.Exit(code=0) from None
 
     # Flatten all results across all targets for reporting
     flat_results = [r for host_results in all_results.values() for r in host_results]
@@ -112,11 +110,11 @@ def scan(
 
 
 def _resolve_port_list(
-    ports: Optional[str],
-    top_ports: Optional[int],
+    ports: str | None,
+    top_ports: int | None,
     full: bool,
     common: bool,
-) -> Optional[list[int]]:
+) -> list[int] | None:
     """Turn CLI port arguments into a concrete list of port numbers.
 
     Priority: --full > --top-ports > --common > -p
@@ -204,7 +202,7 @@ def _enrich_results(
     return enriched
 
 
-def _save_outputs(report, output: Optional[str]) -> None:
+def _save_outputs(report, output: str | None) -> None:
     """Write report files based on the -o flag value."""
     if not output:
         return
