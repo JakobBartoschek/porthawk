@@ -1,0 +1,56 @@
+# Python & Build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+
+# Virtual Environments
+venv/
+.venv/
+env/
+.env
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Security — never commit these
+*.key
+*.pem
+*.p12
+secrets.json
+.env*
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pre-commit-cache/
+
+# Project specific
+reports/
+*.log
+*.tmp
+
+# Private AI context — local only, never push
+.ai-context/
+.claude/
+.context/
