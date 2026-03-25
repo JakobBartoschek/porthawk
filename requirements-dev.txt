@@ -1,0 +1,16 @@
+# Development and CI dependencies
+# Install with: pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+# Testing
+pytest>=7.0
+pytest-asyncio>=0.23
+pytest-mock>=3.10
+pytest-cov>=4.0
+
+# Code quality — not installed locally on Windows dev machine,
+# but installed in CI (ubuntu-latest via GitHub Actions)
+black>=24.0
+ruff>=0.3
+mypy>=1.9
