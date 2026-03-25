@@ -50,7 +50,3 @@ reports/
 *.log
 *.tmp
 
-# Private AI context — local only, never push
-.ai-context/
-.claude/
-.context/
