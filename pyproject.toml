@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "porthawk"
+version = "0.1.0"
+description = "Async port scanner with OS fingerprinting, banner grabbing, and multi-format reporting"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Jakob Bartoschek" }]
+requires-python = ">=3.10"
+keywords = ["port-scanner", "network", "security", "penetration-testing", "asyncio"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "typer>=0.9",
+    "httpx>=0.25",
+    "jinja2>=3.1",
+    "rich>=13.0",
+    "tqdm>=4.65",
+]
+
+[project.scripts]
+porthawk = "porthawk.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/JakobBartoschek/porthawk"
+"Bug Tracker" = "https://github.com/JakobBartoschek/porthawk/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["porthawk*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short -p no:seleniumbase"
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",   # line length handled by black
+    "B008",   # do not perform function calls in default arguments (typer pattern)
+]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+ignore_missing_imports = true
+warn_return_any = false
+warn_unused_ignores = true
