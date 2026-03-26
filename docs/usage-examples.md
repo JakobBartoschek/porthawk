@@ -480,6 +480,64 @@ results = asyncio.run(porthawk.evasion_scan_host("192.168.1.1", range(1, 1025), 
 
 ---
 
+## 17. Passive OS Fingerprinting
+
+**Scenario:** You want to know what OS a host is running without sending unusual packets.
+One SYN — the SYN-ACK response tells you the OS from its TCP stack defaults.
+
+```bash
+# Requires root/admin or Scapy
+sudo porthawk -t 192.168.1.1 --common --passive-os
+
+# Combine with a full scan for context
+sudo porthawk -t 192.168.1.1 --common --banners --passive-os
+```
+
+Expected output (with `--passive-os`):
+```
+PortHawk — scanning 192.168.1.1 (1 host, 100 ports, TCP)
+
+Running passive OS fingerprinting (sends one SYN)...
+
+Passive OS fingerprint: Windows — Windows 10 / 11 / Server 2019+
+  confidence=HIGH  score=0.91  method=tcp_fingerprint+knn
+  signals: ttl=128 (family 128), window=65535 (exact), df=1, options order match
+```
+
+Programmatic use:
+
+```python
+import porthawk
+
+# Full TCP stack fingerprint — sends one SYN, reads SYN-ACK
+match = porthawk.passive_os_scan("192.168.1.1")
+if match:
+    print(f"OS: {match.os_family} — {match.os_detail}")
+    print(f"confidence={match.confidence}  score={match.score:.2f}")
+    # Windows — Windows 10 / 11 / Server 2019+
+    # confidence=HIGH  score=0.91
+
+# Classify from raw bytes (e.g. from your own packet capture)
+match = porthawk.fingerprint_os(raw_ip_tcp_bytes)
+
+# TTL-only — no root needed, low confidence
+match = porthawk.ttl_only_os(64)
+print(match.os_family)   # "Linux/Unix"
+print(match.confidence)  # "LOW"
+```
+
+**What it reads from the SYN-ACK:**
+- **TTL** — 64=Linux, 128=Windows, 255=Cisco/OpenBSD
+- **Window size** — Windows sends 65535, Linux 4.x sends 29200
+- **TCP option order** — Windows: MSS,NOP,WS,NOP,NOP,SACK — Linux: MSS,SACK,TS,NOP,WS
+- **Window scale** — Windows=8, Linux=7, macOS=6
+- **Timestamps** — Linux/macOS include them, Windows doesn't by default
+- **DF bit** — almost everyone sets it; network devices often don't
+
+Confidence thresholds: `≥0.70` → HIGH, `0.45–0.69` → MEDIUM, `<0.45` → LOW
+
+---
+
 ## Common Error Messages
 
 ### `PermissionError: UDP scanning needs admin/root privileges`

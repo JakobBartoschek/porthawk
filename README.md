@@ -32,6 +32,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 - **Adaptive scan speed** — AIMD concurrency control: starts conservative, ramps up on stable networks, backs off when timeouts spike. RFC 6298 SRTT/RTTVAR for jitter detection.
 - **SYN scan (half-open)** — raw SYN packets without completing the TCP handshake. Uses Scapy when available, falls back to Linux raw sockets. Requires root/admin. (`pip install porthawk[syn]`)
 - **IDS/IPS evasion** — "Slow & Low" mode for red-team scenarios: IP fragmentation, exponential timing jitter, decoy source IPs, custom TCP flag combos (FIN, NULL, XMAS, ACK, Maimon)
+- **Passive OS fingerprinting** — TCP/IP stack analysis from SYN-ACK responses: TTL, window size, MSS, TCP options, DF bit. Rule-based scoring + KNN classifier, 16-entry signature database (Windows, Linux, macOS, BSD, network devices). >80% OS family accuracy.
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -183,6 +184,11 @@ sudo porthawk -t 192.168.1.1 -p 80,443 --evasion-type xmas --jitter 5.0
 sudo porthawk -t 192.168.1.1 --common --slow-low --decoys "1.2.3.4,5.6.7.8"
 ```
 
+**Passive OS fingerprinting — TCP stack analysis from SYN-ACK:**
+```bash
+sudo porthawk -t 192.168.1.1 --common --passive-os
+```
+
 **UDP scan (requires admin/root):**
 ```bash
 sudo porthawk -t 192.168.1.1 -p 53,161,123 --udp
@@ -279,6 +285,21 @@ cfg = porthawk.EvasionConfig(scan_type="xmas", max_delay=10.0, fragment=True)
 results = asyncio.run(porthawk.evasion_scan_host("192.168.1.1", [80, 443], config=cfg))
 ```
 
+```python
+# Passive OS fingerprinting — analyze one SYN-ACK response (requires root/admin or Scapy)
+match = porthawk.passive_os_scan("192.168.1.1")
+if match:
+    print(f"{match.os_family}  {match.os_detail}  confidence={match.confidence}")
+    # e.g. "Windows  Windows 10 / 11 / Server 2019+  confidence=HIGH"
+
+# Classify OS from raw packet bytes (e.g. from your own capture)
+raw_pkt = bytes(...)  # raw IP+TCP bytes
+match = porthawk.fingerprint_os(raw_pkt)
+
+# TTL-only fallback — no privileges needed, always LOW confidence
+match = porthawk.ttl_only_os(64)  # → "Linux/Unix"
+```
+
 Full API reference: [`docs/api.md`](docs/api.md)
 
 ---
@@ -293,7 +314,7 @@ Full API reference: [`docs/api.md`](docs/api.md)
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -368,6 +389,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] Adaptive scan speed — AIMD concurrency control with RFC 6298 RTT smoothing
 - [x] SYN scan — half-open TCP via Scapy or raw sockets
 - [x] IDS/IPS evasion — Slow & Low mode: IP fragmentation, jitter, decoys, custom TCP flags
+- [x] Passive OS fingerprinting — TCP stack analysis from SYN-ACK, rule-based + KNN classifier
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports

@@ -5,6 +5,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [0.7.0] — 2026-03-26
+
+### Passive OS Fingerprinting
+
+- `porthawk.passive_os_scan(host, port, timeout)` — sends one SYN, reads the SYN-ACK, identifies OS
+- `porthawk.fingerprint_os(raw_pkt)` — classify OS from any raw IP+TCP packet bytes
+- `porthawk.ttl_only_os(ttl)` — lightweight fallback: TTL→OS guess, always returns `OsMatch` with LOW confidence
+- `OsFingerprint` dataclass — extracted features: TTL, window size, DF bit, MSS, wscale, has_timestamp, has_sack, opt_order
+- `OsMatch` dataclass — result: os_family, os_detail, confidence (HIGH/MEDIUM/LOW), score (0.0–1.0), matched_signals, method
+
+**Signature database (16 entries):**
+- Windows: 10/11, 7/8, XP
+- Linux: 4.x, 5.x, 6.x, embedded
+- Android 8.x–14.x
+- macOS: 12–14, 10.x–11.x
+- iOS 14–17
+- FreeBSD 12–14, OpenBSD 7.x
+- Network devices: Cisco IOS, IOS XE, HP JetDirect, Generic RTOS
+
+**Two-layer classifier:**
+- Rule-based scoring: TTL family (0.35 weight), window size exact/near (0.22/0.08), DF bit (0.06), TCP option presence (0.15), option order (0.10), wscale (0.07), MSS (0.03)
+- KNN in 7-dimensional feature space: [ttl_norm, win_norm, mss_norm, ws_norm, has_ts, has_sack, df_bit]
+- Blended score: 60% rule-based + 40% KNN — KNN uses sklearn if available, pure Python fallback otherwise
+
+**Transport dispatch:**
+- Scapy: sends SYN, captures SYN-ACK, sends RST to clean up
+- Raw sockets: Linux/macOS with root, manual packet construction
+- Falls back to `ttl_only_os` on Windows without Scapy
+
+**CLI flag:**
+- `--passive-os` — TCP fingerprint OS detection; falls back to TTL ping if raw sockets unavailable
+
+**74 new tests in `tests/test_passive_os.py`** — all mocked, no root required
+
+---
+
 ## [0.6.0] — 2026-03-26
 
 ### IDS/IPS Evasion Engine

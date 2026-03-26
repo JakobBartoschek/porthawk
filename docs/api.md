@@ -560,6 +560,109 @@ Returns a red-team preset:
 
 ---
 
+## Passive OS Fingerprinting
+
+Analyzes the SYN-ACK from one probe to infer the target OS without sending unusual packets.
+Requires Scapy (`pip install porthawk[syn]`) or root + Linux/macOS for raw sockets.
+
+```python
+import porthawk
+
+# Full TCP fingerprint — sends one SYN, reads the SYN-ACK
+match = porthawk.passive_os_scan("192.168.1.1")
+if match:
+    print(f"{match.os_family}  {match.os_detail}")
+    print(f"confidence={match.confidence}  score={match.score:.2f}")
+    print(f"signals: {', '.join(match.matched_signals[:4])}")
+    # e.g. "Windows  Windows 10 / 11 / Server 2019+"
+    #      "confidence=HIGH  score=0.91"
+    #      "signals: ttl=128 (family 128), window=65535 (exact), df=1, options order match"
+
+# Classify OS from raw packet bytes (e.g. from Scapy capture)
+match = porthawk.fingerprint_os(raw_bytes)
+
+# Fallback — no privileges needed, no network access
+match = porthawk.ttl_only_os(64)   # → "Linux/Unix", LOW confidence
+match = porthawk.ttl_only_os(128)  # → "Windows", LOW confidence
+match = porthawk.ttl_only_os(255)  # → "Network Device", LOW confidence
+```
+
+### `porthawk.passive_os_scan()`
+
+```python
+def passive_os_scan(
+    host: str,
+    port: int = 80,
+    timeout: float = 2.0,
+) -> OsMatch | None
+```
+
+Sends one SYN to `host:port`, captures the SYN-ACK, and classifies the OS.
+Returns `None` if the host doesn't respond or the platform doesn't support raw sockets.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | `str` | — | Target IP or hostname |
+| `port` | `int` | `80` | Port to send the SYN to |
+| `timeout` | `float` | `2.0` | Wait for SYN-ACK in seconds |
+
+**Platform dispatch:**
+1. Scapy available → uses Scapy (cross-platform, sends RST to clean up)
+2. Linux/macOS root → raw sockets
+3. Windows without Scapy → returns `None`
+
+### `porthawk.fingerprint_os()`
+
+```python
+def fingerprint_os(raw_pkt: bytes) -> OsMatch | None
+```
+
+Classify OS from raw IP+TCP packet bytes. Useful when you capture packets yourself.
+Returns `None` if the packet is too short or malformed.
+
+Two-layer classifier:
+1. Rule-based scoring against the signature DB (always runs)
+2. KNN in 7D feature space (sklearn if available, pure Python fallback)
+3. Blend: 60% rule-based + 40% KNN
+
+### `porthawk.ttl_only_os()`
+
+```python
+def ttl_only_os(ttl: int) -> OsMatch
+```
+
+Guess OS from TTL alone. No network access required. Always returns `OsMatch` with `confidence="LOW"`.
+
+### `OsFingerprint`
+
+```python
+@dataclass
+class OsFingerprint:
+    ttl: int                     # observed TTL from IP header
+    window_size: int             # TCP window size from SYN-ACK
+    df_bit: bool                 # IP Don't Fragment bit
+    mss: int | None              # TCP MSS option (kind=2)
+    wscale: int | None           # TCP Window Scale option (kind=3)
+    has_timestamp: bool          # TCP Timestamps present (kind=8)
+    has_sack: bool               # SACK Permitted present (kind=4)
+    opt_order: tuple[str, ...]   # order of TCP options seen
+```
+
+### `OsMatch`
+
+```python
+@dataclass
+class OsMatch:
+    os_family: str          # "Windows", "Linux", "macOS", "FreeBSD", "Network Device", "Unknown"
+    os_detail: str          # e.g. "Windows 10 / 11 / Server 2019+", "Linux 5.x"
+    confidence: str         # "HIGH" (≥0.70), "MEDIUM" (0.45–0.69), "LOW" (<0.45)
+    score: float            # 0.0–1.0 blended classifier score
+    matched_signals: list[str]   # which signals contributed most
+    method: str             # "tcp_fingerprint+knn", "ttl_only", "tcp_fingerprint+knn(disagreement)"
+```
+
+---
+
 ## PyPI Publishing
 
 ```bash

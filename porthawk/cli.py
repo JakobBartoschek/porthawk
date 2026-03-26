@@ -15,6 +15,7 @@ from porthawk.cve import lookup_cves
 from porthawk.evasion import EvasionConfig, evasion_scan_host, slow_low_config
 from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_from_ttl
 from porthawk.honeypot import score_honeypot
+from porthawk.passive_os import passive_os_scan, ttl_only_os
 from porthawk.predictor import get_sklearn_status, sort_ports
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
@@ -152,6 +153,14 @@ def scan(
             "Example: --decoys '1.2.3.4,5.6.7.8'",
         ),
     ] = None,
+    passive_os: Annotated[
+        bool,
+        typer.Option(
+            "--passive-os",
+            help="TCP fingerprint OS detection: sends one SYN, reads TTL/window/options from SYN-ACK. "
+            "Requires Scapy or root + Linux/macOS.",
+        ),
+    ] = False,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -281,6 +290,9 @@ def scan(
 
     if honeypot:
         _print_honeypot_report(flat_results)
+
+    if passive_os:
+        _print_passive_os(targets[0])
 
     report = build_report(
         target=target,
@@ -525,6 +537,35 @@ def _print_honeypot_report(results: list) -> None:
             )
     else:
         console.print("  [dim]No honeypot indicators detected[/dim]")
+
+
+def _print_passive_os(host: str) -> None:
+    """Run passive OS fingerprinting and print the result."""
+    console.print("\n[dim]Running passive OS fingerprinting (sends one SYN)...[/dim]")
+
+    result = passive_os_scan(host)
+
+    if result is None:
+        # raw sockets not available — fall back to TTL ping
+        from porthawk.fingerprint import get_ttl_via_ping
+
+        ttl = get_ttl_via_ping(host, timeout=2.0)
+        if ttl is None:
+            console.print("[yellow]Passive OS: could not reach host[/yellow]")
+            return
+        result = ttl_only_os(ttl)
+
+    conf_color = {"HIGH": "green", "MEDIUM": "yellow", "LOW": "red"}.get(result.confidence, "white")
+
+    console.print(
+        f"\n[bold]Passive OS fingerprint:[/bold] "
+        f"[bold {conf_color}]{result.os_family}[/bold {conf_color}] — {result.os_detail}"
+        f"  confidence=[bold {conf_color}]{result.confidence}[/bold {conf_color}]"
+        f"  score={result.score:.2f}"
+        f"  method={result.method}"
+    )
+    if result.matched_signals:
+        console.print(f"  [dim]signals: {', '.join(result.matched_signals[:4])}[/dim]")
 
 
 def main() -> None:
