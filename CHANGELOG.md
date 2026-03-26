@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ## [Unreleased]
 
 ### Added
+- Version-aware CVE matching: `service_version` (e.g., "OpenSSH_8.9p1") is parsed into a precise NVD keyword ("OpenSSH 8.9") — returns actually relevant CVEs instead of generic service-name results
+- Persistent disk cache at `~/.porthawk/cve_cache.json` with 24h TTL — repeated scans don't re-hit NVD rate limits
+- Different service versions on the same network get separate CVE lookups (e.g., mixed OpenSSH versions)
+- `clear_cache(include_disk=True)` to wipe both layers
 - ML port prioritization via `--smart-order` — logistic regression trained on nmap-services frequency data, adjusts for private IP ranges and OS hint; falls back to frequency table if scikit-learn not installed
 - `pip install porthawk[ml]` optional dependency group for scikit-learn + numpy
 - Protocol-aware service detection with version extraction — SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
