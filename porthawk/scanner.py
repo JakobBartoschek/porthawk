@@ -8,6 +8,7 @@ import asyncio
 import ipaddress
 import socket
 import time
+from collections.abc import Callable
 from enum import Enum
 
 from pydantic import BaseModel, field_validator
@@ -202,10 +203,14 @@ async def scan_host(
     max_concurrent: int = 500,
     udp: bool = False,
     show_progress: bool = True,
+    on_result: Callable[[ScanResult], None] | None = None,
 ) -> list[ScanResult]:
     """Scan all ports on a single host. Filters nothing — returns open, closed, and filtered.
 
     Caller decides what to display. Don't hide data here.
+
+    on_result: called for each port the instant it finishes — used by LiveScanUI
+               to update the display in real time. Disables tqdm when set.
     """
     if not ports:
         raise ValueError("Port list is empty — nothing to scan")
@@ -217,7 +222,15 @@ async def scan_host(
     else:
         tasks = [scan_tcp_port(host, p, timeout, semaphore) for p in ports]
 
-    if show_progress:
+    if on_result is not None:
+        # stream each result as it lands — as_completed fires in arrival order, not list order
+        collected: list[ScanResult] = []
+        for coro in asyncio.as_completed(tasks):
+            result = await coro
+            on_result(result)
+            collected.append(result)
+        return collected
+    elif show_progress:
         results: list[ScanResult] = await async_tqdm.gather(
             *tasks,
             desc=f"  {host}",
@@ -234,6 +247,7 @@ async def scan_targets(
     max_concurrent: int = 500,
     udp: bool = False,
     show_progress: bool = True,
+    on_result: Callable[[ScanResult], None] | None = None,
 ) -> dict[str, list[ScanResult]]:
     """Scan multiple hosts sequentially (parallel host scanning is overkill for v0.1.0).
 
@@ -248,6 +262,7 @@ async def scan_targets(
             max_concurrent=max_concurrent,
             udp=udp,
             show_progress=show_progress,
+            on_result=on_result,
         )
         all_results[target] = host_results
     return all_results

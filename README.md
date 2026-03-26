@@ -29,6 +29,7 @@ or a self-contained HTML report. It runs on anything with Python 3.10+, no root 
 - **CVE lookup** via NVD API — see `CVE-2022-0543 (10.0)` next to that open Redis port
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
+- **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
 - **Multi-format output** — Rich terminal table, JSON, CSV, self-contained HTML
 - **CIDR support** — scan `192.168.1.0/24` and it expands automatically
 - **Stealth mode** — single-threaded, 3s timeout, less noise on the wire
@@ -118,6 +119,11 @@ porthawk -t 10.0.0.1 --common --stealth
 **UDP scan (requires admin/root):**
 ```bash
 sudo porthawk -t 192.168.1.1 -p 53,161,123 --udp
+```
+
+**Disable the live UI (for scripts, pipes, CI):**
+```bash
+porthawk -t 192.168.1.1 --common --no-live
 ```
 
 **CVE lookup — see what's actually exploitable:**
