@@ -135,7 +135,12 @@ def test_public_api_exports():
     assert hasattr(porthawk, "udp_scan_host")
     assert hasattr(porthawk, "get_udp_top_ports")
     assert hasattr(porthawk, "build_sarif")
+    assert hasattr(porthawk, "parse_nmap_xml")
+    assert hasattr(porthawk, "compute_diff")
+    assert hasattr(porthawk, "load_results")
+    assert hasattr(porthawk, "ScanDiff")
+    assert hasattr(porthawk, "PortChange")
 
 
 def test_version_accessible():
-    assert porthawk.__version__ == "0.9.0"
+    assert porthawk.__version__ == "1.0.0"

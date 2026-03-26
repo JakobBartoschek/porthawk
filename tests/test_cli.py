@@ -3,8 +3,8 @@
 typer.testing.CliRunner is the right way to test typer apps.
 All scanner calls are mocked so tests don't hit the network.
 
-Note: single-command typer apps are invoked directly without a subcommand prefix.
-'porthawk -t host --common' not 'porthawk scan -t host --common'.
+Note: with multiple subcommands (scan, diff), Typer requires the subcommand name.
+'porthawk scan -t host --common', not 'porthawk -t host --common'.
 """
 
 from pathlib import Path
@@ -46,13 +46,13 @@ def _mock_scan_targets(results: list[ScanResult] | None = None):
 class TestRequiredArgs:
     def test_missing_target_exits_with_error(self):
         """typer exits with code 2 when a required option is missing."""
-        result = runner.invoke(app, ["--common"])
+        result = runner.invoke(app, ["scan", "--common"])
         assert result.exit_code != 0
 
     def test_missing_port_spec_exits_with_error(self):
         """Without port spec, cli.py should exit with code 1 (our own error)."""
         with patch("porthawk.cli.asyncio.run", return_value={"192.168.1.1": []}):
-            result = runner.invoke(app, ["-t", "192.168.1.1"])
+            result = runner.invoke(app, ["scan", "-t", "192.168.1.1"])
         assert result.exit_code != 0
 
 
@@ -64,7 +64,7 @@ class TestPortSelection:
         with patch("porthawk.cli._run_scan", new=_mock_scan_targets(fake_results)):
             with patch("porthawk.cli._enrich_results", return_value=fake_results):
                 with patch("porthawk.cli.print_terminal"):
-                    result = runner.invoke(app, ["-t", "192.168.1.1", "--top-ports", "10"])
+                    result = runner.invoke(app, ["scan", "-t", "192.168.1.1", "--top-ports", "10"])
         assert result.exit_code == 0
 
     def test_common_flag_invokes_scan(self):
@@ -72,7 +72,7 @@ class TestPortSelection:
         with patch("porthawk.cli._run_scan", new=_mock_scan_targets(fake_results)):
             with patch("porthawk.cli._enrich_results", return_value=fake_results):
                 with patch("porthawk.cli.print_terminal"):
-                    result = runner.invoke(app, ["-t", "192.168.1.1", "--common"])
+                    result = runner.invoke(app, ["scan", "-t", "192.168.1.1", "--common"])
         assert result.exit_code == 0
 
     def test_full_flag_invokes_scan(self):
@@ -81,7 +81,7 @@ class TestPortSelection:
         with patch("porthawk.cli._run_scan", new=_mock_scan_targets(fake_results)):
             with patch("porthawk.cli._enrich_results", return_value=fake_results):
                 with patch("porthawk.cli.print_terminal"):
-                    result = runner.invoke(app, ["-t", "192.168.1.1", "--full"])
+                    result = runner.invoke(app, ["scan", "-t", "192.168.1.1", "--full"])
         assert result.exit_code == 0
 
     def test_port_range_flag(self):
@@ -89,7 +89,7 @@ class TestPortSelection:
         with patch("porthawk.cli._run_scan", new=_mock_scan_targets(fake_results)):
             with patch("porthawk.cli._enrich_results", return_value=fake_results):
                 with patch("porthawk.cli.print_terminal"):
-                    result = runner.invoke(app, ["-t", "192.168.1.1", "-p", "1-100"])
+                    result = runner.invoke(app, ["scan", "-t", "192.168.1.1", "-p", "1-100"])
         assert result.exit_code == 0
 
 
@@ -103,7 +103,7 @@ class TestScanOptions:
                 with patch("porthawk.cli.print_terminal"):
                     result = runner.invoke(
                         app,
-                        ["-t", "192.168.1.1", "--common", "--timeout", "2.5"],
+                        ["scan", "-t", "192.168.1.1", "--common", "--timeout", "2.5"],
                     )
         assert result.exit_code == 0
 
@@ -115,12 +115,12 @@ class TestScanOptions:
                 with patch("porthawk.cli.print_terminal"):
                     result = runner.invoke(
                         app,
-                        ["-t", "192.168.1.1", "--common", "--stealth"],
+                        ["scan", "-t", "192.168.1.1", "--common", "--stealth"],
                     )
         assert result.exit_code == 0
 
     def test_invalid_top_ports_value_exits_with_error(self):
-        result = runner.invoke(app, ["-t", "192.168.1.1", "--top-ports", "0"])
+        result = runner.invoke(app, ["scan", "-t", "192.168.1.1", "--top-ports", "0"])
         assert result.exit_code != 0
 
 
@@ -128,9 +128,9 @@ class TestScanOptions:
 
 class TestVersionFlag:
     def test_version_flag_exits_cleanly(self):
-        result = runner.invoke(app, ["--version"])
+        result = runner.invoke(app, ["scan", "--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output or "PortHawk" in result.output
+        assert "1.0.0" in result.output or "PortHawk" in result.output
 
 
 # --- Output format flags ---
@@ -144,7 +144,7 @@ class TestOutputFormats:
                     with patch("porthawk.cli.save_json", return_value=tmp_path / "out.json") as mock_json:
                         result = runner.invoke(
                             app,
-                            ["-t", "192.168.1.1", "--common", "-o", "json"],
+                            ["scan", "-t", "192.168.1.1", "--common", "-o", "json"],
                         )
         assert result.exit_code == 0
         mock_json.assert_called_once()
@@ -157,7 +157,7 @@ class TestOutputFormats:
                 with patch("porthawk.cli.print_terminal"):
                     result = runner.invoke(
                         app,
-                        ["-t", "192.168.1.1", "--common", "-o", "pdf"],
+                        ["scan", "-t", "192.168.1.1", "--common", "-o", "pdf"],
                     )
         assert result.exit_code == 0  # warn, don't crash
 
