@@ -37,6 +37,9 @@ ml = [
     "scikit-learn>=1.3",
     "numpy>=1.24",
 ]
+syn = [
+    "scapy>=2.5",
+]
 
 [project.scripts]
 porthawk = "porthawk.cli:main"

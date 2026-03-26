@@ -411,6 +411,67 @@ AIMD algorithm:
 
 ---
 
+## SYN Scan
+
+Half-open TCP scanner — sends SYN, reads SYN-ACK/RST, never completes the handshake.
+Requires root/admin. Install Scapy for best results: `pip install porthawk[syn]`.
+
+```python
+import asyncio
+import porthawk
+
+# requires admin/root
+results = asyncio.run(
+    porthawk.syn_scan_host("192.168.1.1", [22, 80, 443, 8080], timeout=1.0)
+)
+for r in results:
+    print(f"{r.port}  {r.state}  {r.latency_ms:.1f}ms")
+
+# check what backend will be used before you run
+print(porthawk.get_syn_backend())
+# → "scapy 2.5.0"  or  "raw socket (Linux)"  or  "unavailable (Windows needs Scapy + Npcap)"
+```
+
+### `porthawk.syn_scan_host()`
+
+```python
+async def syn_scan_host(
+    host: str,
+    ports: list[int],
+    timeout: float = 1.0,
+    max_concurrent: int = 100,
+) -> list[ScanResult]
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | `str` | — | Target IP or hostname |
+| `ports` | `list[int]` | — | Ports to probe — raises `ValueError` if empty |
+| `timeout` | `float` | `1.0` | Per-port wait for SYN-ACK or RST |
+| `max_concurrent` | `int` | `100` | Max simultaneous raw socket probes (lower than TCP connect — raw sockets are heavier) |
+
+Raises `ScanPermissionError` if not running as root/admin.
+
+Returns `list[ScanResult]` with `protocol="tcp"` — same structure as regular TCP scan results.
+
+### `porthawk.get_syn_backend()`
+
+```python
+def get_syn_backend() -> str
+```
+
+Returns a human-readable string describing which SYN scan backend will be used on the current platform, e.g. `"scapy 2.5.0"`, `"raw socket (Linux)"`, or `"unavailable (Windows needs Scapy + Npcap)"`.
+
+Useful for pre-flight checks before starting a scan.
+
+### Backend selection
+
+1. **Scapy** — preferred, cross-platform. Requires `pip install porthawk[syn]` and on Windows: Npcap from npcap.com installed with "WinPcap compatibility mode".
+2. **Raw socket** — Linux/macOS only. Kernel-level packet crafting, no extra dependencies beyond root access.
+3. **Unavailable** — Windows without Scapy. Raises `ScanPermissionError` with install instructions.
+
+---
+
 ## PyPI Publishing
 
 ```bash

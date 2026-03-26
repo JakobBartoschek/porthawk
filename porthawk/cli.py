@@ -18,6 +18,7 @@ from porthawk.predictor import get_sklearn_status, sort_ports
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
 from porthawk.service_db import get_service, get_top_ports
+from porthawk.syn_scan import get_syn_backend, syn_scan_host
 from porthawk.throttle import AdaptiveConfig
 from porthawk.ui import LiveScanUI, is_interactive
 
@@ -104,6 +105,13 @@ def scan(
             help="Adaptive concurrency: starts slow, ramps up on stable networks, backs off on congestion",
         ),
     ] = False,
+    syn: Annotated[
+        bool,
+        typer.Option(
+            "--syn",
+            help="Half-open SYN scan (requires root/admin + Scapy or Linux raw sockets)",
+        ),
+    ] = False,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -115,6 +123,7 @@ def scan(
       porthawk -t scanme.nmap.org --common --os
       porthawk -t 10.0.0.0/24 --top-ports 100
       porthawk -t 192.168.1.1 --full --stealth
+      sudo porthawk -t 192.168.1.1 --common --syn
     """
     # Stealth mode overrides threads and timeout — user probably knows what they're doing
     if stealth:
@@ -128,7 +137,8 @@ def scan(
         raise typer.Exit(code=1)
 
     targets = expand_cidr(target)
-    protocol = "udp" if udp else "tcp"
+    # --syn forces TCP and overrides --udp
+    protocol = "udp" if (udp and not syn) else "tcp"
 
     if smart_order:
         # Quick OS ping before the scan — gives the predictor a useful context signal.
@@ -142,10 +152,14 @@ def scan(
             f"[dim]Smart order active ({get_sklearn_status()}) " f"— first 5: {port_list[:5]}[/dim]"
         )
 
+    scan_label = "SYN" if syn else protocol.upper()
     console.print(
         f"\n[bold cyan]PortHawk[/bold cyan] — scanning [bold]{target}[/bold] "
-        f"({len(targets)} host(s), {len(port_list)} port(s), {protocol.upper()})\n"
+        f"({len(targets)} host(s), {len(port_list)} port(s), {scan_label})\n"
     )
+
+    if syn:
+        console.print(f"[dim]SYN scan backend: {get_syn_backend()}[/dim]")
 
     adaptive_cfg = AdaptiveConfig() if adaptive else None
 
@@ -157,8 +171,15 @@ def scan(
 
     use_live = not no_live and is_interactive()
 
+    from porthawk.exceptions import ScanPermissionError as _ScanPermErr
+
     try:
-        if use_live:
+        if syn:
+            # SYN scan bypasses the normal scan path entirely
+            flat_results = asyncio.run(
+                _run_syn_scan(targets, port_list, timeout, min(threads, 100))
+            )
+        elif use_live:
             with LiveScanUI(target, len(port_list) * len(targets), protocol) as ui:
                 all_results = asyncio.run(
                     _run_scan(
@@ -171,19 +192,21 @@ def scan(
                         adaptive_cfg=adaptive_cfg,
                     )
                 )
+            flat_results = [r for host_results in all_results.values() for r in host_results]
         else:
             all_results = asyncio.run(
                 _run_scan(targets, port_list, timeout, threads, udp, adaptive_cfg=adaptive_cfg)
             )
+            flat_results = [r for host_results in all_results.values() for r in host_results]
+    except _ScanPermErr as exc:
+        err_console.print(f"Permission error: {exc}")
+        raise typer.Exit(code=1) from exc
     except PermissionError as exc:
         err_console.print(f"Permission error: {exc}")
         raise typer.Exit(code=1) from exc
     except KeyboardInterrupt:
         console.print("\n[yellow]Scan interrupted by user[/yellow]")
         raise typer.Exit(code=0) from None
-
-    # Flatten all results across all targets for reporting
-    flat_results = [r for host_results in all_results.values() for r in host_results]
 
     # Enrich open ports with service info, banners, OS guess
     flat_results = _enrich_results(
@@ -263,6 +286,22 @@ async def _run_scan(
         on_result=on_result,
         adaptive_config=adaptive_cfg,
     )
+
+
+async def _run_syn_scan(
+    targets: list[str],
+    port_list: list[int],
+    timeout: float,
+    max_concurrent: int,
+) -> list:
+    """Run SYN scan against all targets and return a flat result list."""
+    all_results = []
+    for host in targets:
+        results = await syn_scan_host(
+            host, port_list, timeout=timeout, max_concurrent=max_concurrent
+        )
+        all_results.extend(results)
+    return all_results
 
 
 def _enrich_results(

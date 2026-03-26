@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [0.5.0] — 2026-03-26
+
+### SYN Scan (half-open TCP)
+
+- `syn_scan_host(host, ports, timeout, max_concurrent)` — async SYN scanner, returns `list[ScanResult]` identical in structure to regular TCP results
+- Half-open handshake: sends SYN, reads SYN-ACK (OPEN) or RST (CLOSED), sends RST to tear down — no full TCP connection established
+- Two backends: Scapy (preferred, cross-platform) and raw socket fallback (Linux/macOS only)
+- Scapy backend: `IP/TCP` packet with `flags="S"`, uses `sr1()` for single-response capture, sends RST on SYN-ACK via `send()`
+- Raw socket backend: hand-crafted IP+TCP headers with RFC 1071 checksum math, `IP_HDRINCL` for full header control, deadline-loop response capture
+- `_internet_checksum()`: RFC 1071 one's complement sum with carry folding and odd-byte padding
+- `_tcp_checksum()`: pseudo-header method per RFC 793 (src_ip, dst_ip, zero, proto=6, tcp_len)
+- `_get_source_ip()`: UDP connect trick — `sock.connect((host, 80)); getsockname()[0]` — routes correctly through VPNs and multiple NICs
+- `get_syn_backend()` — returns human-readable string describing active backend and Scapy version if available
+- Platform handling: Windows blocks raw TCP sends since XP SP2 — Scapy + Npcap required, clear error with install instructions
+- `_has_raw_socket_privilege()`: `IsUserAnAdmin()` on Windows, `os.getuid() == 0` elsewhere
+- `_require_privileges()` raises `ScanPermissionError` with OS-specific install instructions
+- `--syn` CLI flag — half-open scan with `min(threads, 100)` concurrency cap, prints active backend
+- `pip install porthawk[syn]` optional dependency group (scapy>=2.5)
+- `porthawk.syn_scan_host`, `porthawk.get_syn_backend` exported from public API
+- 41 new tests in `tests/test_syn_scan.py` — all network calls mocked, no root required
+
+---
+
 ## [0.4.0] — 2026-03-26
 
 ### Adaptive Scan Speed

@@ -30,6 +30,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 - **ML port prioritization** — logistic regression trained on internet-wide scan frequencies, adjusts for private IP ranges and OS hint (`pip install porthawk[ml]`)
 - **Honeypot detection** — scores a host 0.0–1.0 for honeypot likelihood based on banner signatures (Cowrie, Dionaea), ICS port patterns (Conpot), port count (T-Pot), latency uniformity, and more
 - **Adaptive scan speed** — AIMD concurrency control: starts conservative, ramps up on stable networks, backs off when timeouts spike. RFC 6298 SRTT/RTTVAR for jitter detection.
+- **SYN scan (half-open)** — raw SYN packets without completing the TCP handshake. Uses Scapy when available, falls back to Linux raw sockets. Requires root/admin. (`pip install porthawk[syn]`)
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -54,6 +55,7 @@ flowchart TD
     CVE["cve.py"]
     HP["honeypot.py"]
     TH["throttle.py"]
+    SYN["syn_scan.py"]
     EXC["exceptions.py"]
     REP["reporter.py"]
     OUT_JSON["JSON"]
@@ -66,6 +68,7 @@ flowchart TD
     CLI --> CVE
     CLI --> HP
     CLI --> TH
+    CLI --> SYN
     API --> SCAN
     SCAN --> TH
     API --> CVE
@@ -94,6 +97,12 @@ With ML port prioritization (scikit-learn):
 
 ```bash
 pip install porthawk[ml]
+```
+
+With SYN scan support (Scapy):
+
+```bash
+pip install porthawk[syn]
 ```
 
 Or from source:
@@ -151,6 +160,11 @@ porthawk -t 10.0.0.1 --common --banners --honeypot
 **Adaptive scan — ramps up concurrency automatically:**
 ```bash
 porthawk -t 192.168.1.1 -p 1-1024 --adaptive
+```
+
+**Half-open SYN scan (requires admin/root + Scapy or Linux):**
+```bash
+sudo porthawk -t 192.168.1.1 --common --syn
 ```
 
 **UDP scan (requires admin/root):**
@@ -229,6 +243,12 @@ for ind in hp.indicators:
     print(f"  [{ind.weight:.2f}] {ind.name}: {ind.description}")
 ```
 
+```python
+# Half-open SYN scan (requires root/admin)
+results = asyncio.run(porthawk.syn_scan_host("192.168.1.1", [22, 80, 443], timeout=1.0))
+print(porthawk.get_syn_backend())  # e.g. "scapy 2.5.0" or "raw socket (Linux)"
+```
+
 Full API reference: [`docs/api.md`](docs/api.md)
 
 ---
@@ -243,7 +263,7 @@ Full API reference: [`docs/api.md`](docs/api.md)
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -316,6 +336,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] Persistent CVE disk cache with TTL
 - [x] Honeypot detection — score-based detection for Cowrie, Dionaea, Conpot, T-Pot
 - [x] Adaptive scan speed — AIMD concurrency control with RFC 6298 RTT smoothing
+- [x] SYN scan — half-open TCP via Scapy or raw sockets
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
