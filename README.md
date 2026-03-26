@@ -26,6 +26,7 @@ or a self-contained HTML report. It runs on anything with Python 3.10+, no root 
 - **UDP scanning** via raw sockets (requires admin/root)
 - **OS fingerprinting** from TTL value — Linux/Unix, Windows, Network Device
 - **Service detection** — protocol-aware banner grabbing with version extraction for SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
+- **ML port prioritization** — logistic regression trained on internet-wide scan frequencies, adjusts for private IP ranges and OS hint (`pip install porthawk[ml]`)
 - **CVE lookup** via NVD API — see `CVE-2022-0543 (10.0)` next to that open Redis port
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
@@ -79,6 +80,12 @@ flowchart TD
 pip install porthawk
 ```
 
+With ML port prioritization (scikit-learn):
+
+```bash
+pip install porthawk[ml]
+```
+
 Or from source:
 
 ```bash
@@ -129,6 +136,11 @@ porthawk -t 192.168.1.1 --common --no-live
 **CVE lookup — see what's actually exploitable:**
 ```bash
 porthawk -t 192.168.1.1 --common --cve
+```
+
+**ML port prioritization — scan likely-open ports first (useful in stealth mode):**
+```bash
+porthawk -t 192.168.1.1 --common --smart-order --stealth
 ```
 
 **Set NVD_API_KEY to remove rate limiting (free at nvd.nist.gov):**

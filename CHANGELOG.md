@@ -8,6 +8,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ## [Unreleased]
 
 ### Added
+- ML port prioritization via `--smart-order` — logistic regression trained on nmap-services frequency data, adjusts for private IP ranges and OS hint; falls back to frequency table if scikit-learn not installed
+- `pip install porthawk[ml]` optional dependency group for scikit-learn + numpy
 - Protocol-aware service detection with version extraction — SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
 - Services that speak first (SSH, FTP, MySQL, VNC) are read immediately without sending a probe
 - Protocol-specific probes for Redis (`PING\r\n`), Memcached (`stats\r\n`), and others
