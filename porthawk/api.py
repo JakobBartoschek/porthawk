@@ -130,6 +130,7 @@ async def scan(
         max_concurrent=concurrency,
         udp=udp,
         show_progress=False,
+        on_result=None,
     )
 
     flat = [r for host_results in raw.values() for r in host_results]

@@ -8,6 +8,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ## [Unreleased]
 
 ### Added
+- Live terminal UI via `rich.Live` — progress bar, live open-ports table, and timestamped event log updating in real time during the scan
+- `--no-live` flag to fall back to plain tqdm output (for scripts, pipes, CI)
+- Auto-detection: live UI only activates on real terminals (`sys.stdout.isatty()`), never on pipes
 - CVE lookup via NVD API v2.0 — `--cve` flag attaches top CVEs (sorted by CVSS score) to each open service
 - In-memory CVE cache per service name — one API call per unique service, not per open port
 - `NVD_API_KEY` env var support — set it to remove inter-request delays (50 req/30s vs 5)

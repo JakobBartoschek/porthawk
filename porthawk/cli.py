@@ -16,6 +16,7 @@ from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_fr
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
 from porthawk.service_db import get_service, get_top_ports
+from porthawk.ui import LiveScanUI, is_interactive
 
 app = typer.Typer(
     name="porthawk",
@@ -75,6 +76,10 @@ def scan(
         bool,
         typer.Option("--show-closed", help="Show closed and filtered ports in terminal output"),
     ] = False,
+    no_live: Annotated[
+        bool,
+        typer.Option("--no-live", help="Disable live UI — use plain output (for pipes/scripts)"),
+    ] = False,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -106,8 +111,16 @@ def scan(
         f"({len(targets)} host(s), {len(port_list)} port(s), {protocol.upper()})\n"
     )
 
+    use_live = not no_live and is_interactive()
+
     try:
-        all_results = asyncio.run(_run_scan(targets, port_list, timeout, threads, udp))
+        if use_live:
+            with LiveScanUI(target, len(port_list) * len(targets), protocol) as ui:
+                all_results = asyncio.run(
+                    _run_scan(targets, port_list, timeout, threads, udp, on_result=ui.on_result)
+                )
+        else:
+            all_results = asyncio.run(_run_scan(targets, port_list, timeout, threads, udp))
     except PermissionError as exc:
         err_console.print(f"Permission error: {exc}")
         raise typer.Exit(code=1) from exc
@@ -176,17 +189,20 @@ async def _run_scan(
     timeout: float,
     threads: int,
     udp: bool,
+    on_result=None,
 ) -> dict[str, list]:
     """Async wrapper — keeps the asyncio.run() call in main() clean."""
     from porthawk.scanner import scan_targets
 
+    # when on_result is set (live mode), tqdm progress is disabled — the live UI takes over
     return await scan_targets(
         targets=targets,
         ports=port_list,
         timeout=timeout,
         max_concurrent=threads,
         udp=udp,
-        show_progress=True,
+        show_progress=on_result is None,
+        on_result=on_result,
     )
 
 
