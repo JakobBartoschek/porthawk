@@ -472,6 +472,94 @@ Useful for pre-flight checks before starting a scan.
 
 ---
 
+## Evasion Scan
+
+IDS/IPS evasion techniques for authorized red-team scenarios. Requires root/admin and Scapy for full functionality.
+
+```python
+import asyncio
+import porthawk
+
+# Full preset — slow & low, looks like Windows, fragments everything
+cfg = porthawk.slow_low_config()
+cfg.decoys = ["1.2.3.4", "5.6.7.8"]  # optional decoy IPs
+
+results = asyncio.run(
+    porthawk.evasion_scan_host("192.168.1.1", [22, 80, 443], config=cfg, max_concurrent=2)
+)
+
+# Custom — XMAS scan, 10s jitter, 8-byte fragments
+cfg = porthawk.EvasionConfig(
+    scan_type="xmas",
+    max_delay=10.0,
+    jitter_distribution="exponential",
+    fragment=True,
+    ttl=128,
+)
+results = asyncio.run(porthawk.evasion_scan_host("192.168.1.1", [80, 443], config=cfg))
+```
+
+### `porthawk.evasion_scan_host()`
+
+```python
+async def evasion_scan_host(
+    host: str,
+    ports: list[int],
+    config: EvasionConfig | None = None,
+    timeout: float = 1.0,
+    max_concurrent: int = 10,
+) -> list[ScanResult]
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | `str` | — | Target IP or hostname |
+| `ports` | `list[int]` | — | Ports to probe — raises `ValueError` if empty |
+| `config` | `EvasionConfig \| None` | `None` | Evasion config — `None` uses `EvasionConfig()` defaults (no evasion) |
+| `timeout` | `float` | `1.0` | Per-port wait in seconds |
+| `max_concurrent` | `int` | `10` | Max simultaneous probes (lower than SYN scan — evasion implies slow) |
+
+### `porthawk.EvasionConfig`
+
+```python
+@dataclass
+class EvasionConfig:
+    scan_type: str = "syn"            # syn, fin, null, xmas, ack, maimon
+    min_delay: float = 0.0            # seconds (0 = no delay)
+    max_delay: float = 0.0            # seconds
+    jitter_distribution: str = "uniform"   # "uniform" or "exponential"
+    fragment: bool = False            # split IP payload into fragment_size-byte chunks
+    fragment_size: int = 8            # bytes, must be multiple of 8
+    decoys: list[str] = []            # fake source IPs (Scapy required)
+    ttl: int = 64                     # IP TTL — 128 looks like Windows
+    randomize_ip_id: bool = True      # random IP ID defeats passive OS fingerprinting
+```
+
+#### Scan type semantics
+
+| Type | TCP Flags | Open | Closed | Notes |
+|------|-----------|------|--------|-------|
+| `syn` | `0x02` | SYN-ACK | RST | Works everywhere |
+| `fin` | `0x01` | No reply | RST | Unreliable on Windows targets |
+| `null` | `0x00` | No reply | RST | Unreliable on Windows targets |
+| `xmas` | `0x29` | No reply | RST | FIN+PSH+URG, unreliable on Windows |
+| `ack` | `0x10` | RST (unfiltered) | No reply (filtered) | Maps firewall rules, not port state |
+| `maimon` | `0x11` | No reply | RST | FIN+ACK, works on some BSD stacks |
+
+### `porthawk.slow_low_config()`
+
+```python
+def slow_low_config() -> EvasionConfig
+```
+
+Returns a red-team preset:
+- `min_delay=5.0, max_delay=30.0, jitter_distribution="exponential"` — Poisson-like inter-arrivals
+- `fragment=True, fragment_size=8` — 8-byte IP fragments
+- `ttl=128` — looks like Windows, confuses passive OS fingerprinting
+- Decoys not set — add them explicitly
+
+---
+
 ## PyPI Publishing
 
 ```bash

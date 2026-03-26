@@ -19,6 +19,7 @@ Context manager::
 
 from porthawk.api import Scanner, scan
 from porthawk.cve import CVEInfo
+from porthawk.evasion import EvasionConfig, evasion_scan_host, slow_low_config
 from porthawk.exceptions import (
     InvalidPortSpecError,
     InvalidTargetError,
@@ -32,7 +33,7 @@ from porthawk.scanner import PortState, ScanResult
 from porthawk.syn_scan import get_syn_backend, syn_scan_host
 from porthawk.throttle import AdaptiveConfig, AdaptiveSemaphore, NetworkStats
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __author__ = "Jakob Bartoschek"
 __license__ = "MIT"
 
@@ -55,6 +56,10 @@ __all__ = [
     # SYN scan
     "syn_scan_host",
     "get_syn_backend",
+    # Evasion
+    "evasion_scan_host",
+    "EvasionConfig",
+    "slow_low_config",
     # Adaptive throttling
     "AdaptiveConfig",
     "AdaptiveSemaphore",

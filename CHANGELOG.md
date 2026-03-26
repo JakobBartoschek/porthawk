@@ -5,6 +5,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [0.6.0] — 2026-03-26
+
+### IDS/IPS Evasion Engine
+
+- `porthawk.evasion_scan_host(host, ports, config, timeout, max_concurrent)` — async evasion scanner
+- `EvasionConfig` dataclass: scan type, jitter settings, fragmentation, decoys, TTL, IP ID randomization
+- `slow_low_config()` — red-team preset: 5–30s exponential jitter, 8-byte IP fragments, TTL=128
+
+**Scan types (TCP flag combinations):**
+- `syn` — standard SYN scan (SYN-ACK=OPEN, RST=CLOSED, no reply=FILTERED)
+- `fin` — FIN-only (RFC 793: RST=CLOSED, no reply=OPEN — open ports silently discard)
+- `null` — no flags set (same semantics as FIN)
+- `xmas` — FIN+PSH+URG (0x29, "all the lights on") — same semantics as FIN
+- `ack` — ACK-only (maps stateless firewall rules: RST=unfiltered, no reply=filtered)
+- `maimon` — FIN+ACK (Uriel Maimon's 1996 trick — works on some BSD stacks)
+
+**Timing jitter:**
+- Uniform distribution: random delay in [min_delay, max_delay]
+- Exponential distribution: Poisson-like inter-arrivals — statistically indistinguishable from real user traffic
+- Pre-probe sleep (before semaphore acquire) means jitter applies regardless of concurrency level
+
+**IP fragmentation:**
+- Raw socket path: manual IP fragment headers with correct MF bit and 8-byte-aligned offsets
+- Scapy path: `scapy.all.fragment()` for reliable cross-platform fragmentation
+- All fragments share the same IP ID (required for target reassembly)
+- Splits TCP header across multiple IP fragments — defeats IDS engines that only inspect the first fragment
+
+**Decoy scans (Scapy only):**
+- Sends spoofed probe packets from each decoy IP before the real probe
+- Target sees scans from multiple hosts simultaneously, obscuring the real scanner
+- Irregular spacing between decoys (random 50–300ms) to avoid burst detection
+
+**Packet-level tweaks:**
+- `ttl=128` in `slow_low_config()` to look like a Windows host (confuses passive OS fingerprinting)
+- `randomize_ip_id=True` — random IP ID defeats some passive fingerprinting
+
+**CLI flags:**
+- `--slow-low` — full red-team preset
+- `--evasion-type [syn|fin|null|xmas|ack|maimon]` — TCP flag combo
+- `--jitter FLOAT` — max random delay in seconds
+- `--fragment` — enable IP fragmentation
+- `--decoys "IP1,IP2,..."` — comma-separated decoy IPs (Scapy required)
+- 78 new tests in `tests/test_evasion.py` — all mocked, no root required
+
+---
+
 ## [0.5.0] — 2026-03-26
 
 ### SYN Scan (half-open TCP)

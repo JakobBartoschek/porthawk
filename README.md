@@ -31,6 +31,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 - **Honeypot detection** — scores a host 0.0–1.0 for honeypot likelihood based on banner signatures (Cowrie, Dionaea), ICS port patterns (Conpot), port count (T-Pot), latency uniformity, and more
 - **Adaptive scan speed** — AIMD concurrency control: starts conservative, ramps up on stable networks, backs off when timeouts spike. RFC 6298 SRTT/RTTVAR for jitter detection.
 - **SYN scan (half-open)** — raw SYN packets without completing the TCP handshake. Uses Scapy when available, falls back to Linux raw sockets. Requires root/admin. (`pip install porthawk[syn]`)
+- **IDS/IPS evasion** — "Slow & Low" mode for red-team scenarios: IP fragmentation, exponential timing jitter, decoy source IPs, custom TCP flag combos (FIN, NULL, XMAS, ACK, Maimon)
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -167,6 +168,21 @@ porthawk -t 192.168.1.1 -p 1-1024 --adaptive
 sudo porthawk -t 192.168.1.1 --common --syn
 ```
 
+**Slow & Low — red-team evasion mode:**
+```bash
+sudo porthawk -t 192.168.1.1 --common --slow-low
+```
+
+**XMAS scan with 5-second jitter:**
+```bash
+sudo porthawk -t 192.168.1.1 -p 80,443 --evasion-type xmas --jitter 5.0
+```
+
+**Decoy scan — hide among fake source IPs:**
+```bash
+sudo porthawk -t 192.168.1.1 --common --slow-low --decoys "1.2.3.4,5.6.7.8"
+```
+
 **UDP scan (requires admin/root):**
 ```bash
 sudo porthawk -t 192.168.1.1 -p 53,161,123 --udp
@@ -249,6 +265,20 @@ results = asyncio.run(porthawk.syn_scan_host("192.168.1.1", [22, 80, 443], timeo
 print(porthawk.get_syn_backend())  # e.g. "scapy 2.5.0" or "raw socket (Linux)"
 ```
 
+```python
+# Slow & Low evasion scan — red-team preset (requires root/admin)
+cfg = porthawk.slow_low_config()
+cfg.decoys = ["1.2.3.4", "5.6.7.8"]  # optional: add decoy IPs
+
+results = asyncio.run(
+    porthawk.evasion_scan_host("192.168.1.1", [22, 80, 443], config=cfg, max_concurrent=2)
+)
+
+# custom config — XMAS scan with 10s max jitter and IP fragmentation
+cfg = porthawk.EvasionConfig(scan_type="xmas", max_delay=10.0, fragment=True)
+results = asyncio.run(porthawk.evasion_scan_host("192.168.1.1", [80, 443], config=cfg))
+```
+
 Full API reference: [`docs/api.md`](docs/api.md)
 
 ---
@@ -263,7 +293,7 @@ Full API reference: [`docs/api.md`](docs/api.md)
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -337,6 +367,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] Honeypot detection — score-based detection for Cowrie, Dionaea, Conpot, T-Pot
 - [x] Adaptive scan speed — AIMD concurrency control with RFC 6298 RTT smoothing
 - [x] SYN scan — half-open TCP via Scapy or raw sockets
+- [x] IDS/IPS evasion — Slow & Low mode: IP fragmentation, jitter, decoys, custom TCP flags
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
