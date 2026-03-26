@@ -242,7 +242,9 @@ def _enrich_results(
 
             async def _grab_all() -> None:
                 for r in open_results:
-                    r.banner = await fingerprint_port(r.host, r.port, timeout=timeout)
+                    r.banner, r.service_version = await fingerprint_port(
+                        r.host, r.port, timeout=timeout
+                    )
 
             asyncio.run(_grab_all())
 

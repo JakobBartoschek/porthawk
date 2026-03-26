@@ -34,6 +34,7 @@ class ScanResult(BaseModel):
     os_guess: str | None = None
     ttl: int | None = None
     latency_ms: float | None = None
+    service_version: str | None = None  # e.g. "OpenSSH_8.9p1", "7.0.5" for Redis
     cves: list[dict] = []
 
     @field_validator("port")
