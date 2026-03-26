@@ -69,7 +69,7 @@ async def _enrich(
     if banners:
         open_ports = [r for r in results if r.state == PortState.OPEN]
         for r in open_ports:
-            r.banner = await fingerprint_port(r.host, r.port, timeout=timeout)
+            r.banner, r.service_version = await fingerprint_port(r.host, r.port, timeout=timeout)
 
     return results
 

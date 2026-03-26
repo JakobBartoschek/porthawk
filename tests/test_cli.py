@@ -229,7 +229,7 @@ class TestEnrichResults:
         open_result = _fake_scan_result(80, state=PortState.OPEN)
         closed_result = _fake_scan_result(9999, state=PortState.CLOSED)
 
-        with patch("porthawk.cli.fingerprint_port", new=AsyncMock(return_value="nginx/1.24")) as mock_fp:
+        with patch("porthawk.cli.fingerprint_port", new=AsyncMock(return_value=("nginx/1.24", "1.24"))) as mock_fp:
             enriched = _enrich_results(
                 [open_result, closed_result],
                 host="192.168.1.1",
@@ -244,7 +244,7 @@ class TestEnrichResults:
     def test_banners_not_grabbed_for_closed_only(self):
         closed_result = _fake_scan_result(9999, state=PortState.CLOSED)
 
-        with patch("porthawk.cli.fingerprint_port", new=AsyncMock(return_value=None)) as mock_fp:
+        with patch("porthawk.cli.fingerprint_port", new=AsyncMock(return_value=(None, None))) as mock_fp:
             _enrich_results(
                 [closed_result],
                 host="192.168.1.1",

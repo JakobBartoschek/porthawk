@@ -11,6 +11,7 @@ import pytest
 
 from porthawk.fingerprint import (
     extract_ssh_version,
+    extract_version,
     fingerprint_port,
     grab_banner,
     grab_http_headers,
@@ -228,6 +229,49 @@ class TestGetTtlViaPing:
         assert ttl is None
 
 
+# --- extract_version ---
+
+class TestExtractVersion:
+    def test_ssh_banner(self):
+        assert extract_version("SSH-2.0-OpenSSH_8.9p1 Ubuntu") == "OpenSSH_8.9p1"
+
+    def test_ftp_proftpd_banner(self):
+        result = extract_version("220 ProFTPD 1.3.6c Server (Ubuntu) [1.2.3.4]")
+        assert result is not None
+        assert "ProFTPD" in result
+        assert "1.3.6c" in result
+
+    def test_smtp_postfix_banner(self):
+        result = extract_version("220 mail.example.com ESMTP Postfix")
+        assert result == "SMTP/Postfix"
+
+    def test_pop3_dovecot_banner(self):
+        result = extract_version("+OK Dovecot ready.")
+        assert result == "POP3/Dovecot"
+
+    def test_imap_dovecot_banner(self):
+        result = extract_version("* OK Dovecot ready.")
+        assert result == "IMAP/Dovecot"
+
+    def test_vnc_banner(self):
+        result = extract_version("RFB 003.008")
+        assert result == "VNC/RFB-003.008"
+
+    def test_memcached_stat(self):
+        result = extract_version("STAT version 1.6.17")
+        assert result == "Memcached/1.6.17"
+
+    def test_redis_pong(self):
+        result = extract_version("+PONG")
+        assert result == "Redis"
+
+    def test_unknown_banner_returns_none(self):
+        assert extract_version("some random garbage") is None
+
+    def test_empty_string_returns_none(self):
+        assert extract_version("") is None
+
+
 # --- fingerprint_port (integration of the above) ---
 
 class TestFingerprintPort:
@@ -243,10 +287,11 @@ class TestFingerprintPort:
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            result = await fingerprint_port("192.168.1.1", 80, timeout=2.0)
+            banner, version = await fingerprint_port("192.168.1.1", 80, timeout=2.0)
 
-        assert result is not None
-        assert "nginx" in result
+        assert banner is not None
+        assert "nginx" in banner
+        assert version is None  # HTTP grabber doesn't return a structured version
 
     @pytest.mark.asyncio
     async def test_ssh_port_returns_ssh_version(self):
@@ -257,7 +302,16 @@ class TestFingerprintPort:
         mock_writer.wait_closed = AsyncMock()
 
         with patch("asyncio.open_connection", new=AsyncMock(return_value=(mock_reader, mock_writer))):
-            result = await fingerprint_port("192.168.1.1", 22, timeout=2.0)
+            banner, version = await fingerprint_port("192.168.1.1", 22, timeout=2.0)
 
-        assert result is not None
-        assert "OpenSSH" in result
+        assert banner is not None
+        assert "OpenSSH" in banner
+        assert version == "OpenSSH_8.9p1"
+
+    @pytest.mark.asyncio
+    async def test_no_banner_returns_none_tuple(self):
+        with patch("asyncio.open_connection", new=AsyncMock(side_effect=ConnectionRefusedError)):
+            banner, version = await fingerprint_port("192.168.1.1", 9999, timeout=2.0)
+
+        assert banner is None
+        assert version is None
