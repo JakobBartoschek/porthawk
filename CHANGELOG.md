@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ## [Unreleased]
 
 ### Added
+- Protocol-aware service detection with version extraction — SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
+- Services that speak first (SSH, FTP, MySQL, VNC) are read immediately without sending a probe
+- Protocol-specific probes for Redis (`PING\r\n`), Memcached (`stats\r\n`), and others
+- MySQL version via binary handshake parsing (protocol v10, null-terminated version string at byte 5)
+- Redis version via `PING` → `+PONG` confirm, then `INFO server` for exact `redis_version:`
+- Named regex version patterns covering 8 banner formats — first match wins, clean version string extracted
+- `service_version` field on `ScanResult` — structured version string separate from raw banner display
 - Live terminal UI via `rich.Live` — progress bar, live open-ports table, and timestamped event log updating in real time during the scan
 - `--no-live` flag to fall back to plain tqdm output (for scripts, pipes, CI)
 - Auto-detection: live UI only activates on real terminals (`sys.stdout.isatty()`), never on pipes

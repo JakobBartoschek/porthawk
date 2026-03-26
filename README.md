@@ -25,7 +25,7 @@ or a self-contained HTML report. It runs on anything with Python 3.10+, no root 
 - **Async TCP scanning** via `asyncio` — 500 concurrent connections by default, configurable
 - **UDP scanning** via raw sockets (requires admin/root)
 - **OS fingerprinting** from TTL value — Linux/Unix, Windows, Network Device
-- **Banner grabbing** — SSH version, HTTP headers, FTP/SMTP banners
+- **Service detection** — protocol-aware banner grabbing with version extraction for SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
 - **CVE lookup** via NVD API — see `CVE-2022-0543 (10.0)` next to that open Redis port
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
@@ -148,8 +148,8 @@ PortHawk — scanning 192.168.1.1 (1 host, 100 ports, TCP)
   │ 22/tcp    │ open     │ ssh                │ MEDIUM   │ SSH OpenSSH_8.9p1  │
   │ 80/tcp    │ open     │ http               │ LOW      │ server: nginx/1.24 │
   │ 443/tcp   │ open     │ https              │ LOW      │ HTTP 200           │
-  │ 3306/tcp  │ open     │ mysql              │ MEDIUM   │                    │
-  │ 6379/tcp  │ open     │ redis              │ HIGH     │ +PONG              │
+  │ 3306/tcp  │ open     │ mysql              │ MEDIUM   │ MySQL 8.0.33       │
+  │ 6379/tcp  │ open     │ redis              │ HIGH     │ Redis 7.0.11       │
   └───────────┴──────────┴────────────────────┴──────────┴────────────────────┘
   Open: 5 / 100 scanned
 ```
@@ -213,7 +213,8 @@ Full API reference: [`docs/api.md`](docs/api.md)
       "risk_level": "MEDIUM",
       "os_guess": "Linux/Unix",
       "ttl": 64,
-      "latency_ms": 0.8
+      "latency_ms": 0.8,
+      "service_version": "OpenSSH_8.9p1"
     }
   ]
 }
@@ -254,7 +255,7 @@ All network calls are mocked — tests run without any real connections.
 
 ## Roadmap
 
-- [ ] CVE lookup via NVD API per detected service/version
+- [x] CVE lookup via NVD API per detected service/version
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask (already installed as optional dep)
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
