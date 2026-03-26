@@ -183,16 +183,30 @@ concurrent connections, all ports start scanning nearly simultaneously anyway.
 
 ## 9. UDP Scan for Common Protocols
 
-**Scenario:** Looking for SNMP, DNS, TFTP, NTP.
+**Scenario:** Looking for DNS, NTP, SNMP, NetBIOS, SSDP — services a TCP scanner won't find.
 
 ```bash
-# Requires admin (Windows) or root/sudo (Linux/macOS)
-sudo porthawk -t 192.168.1.1 -p 53,67,69,123,161,162 --udp
+# Scan top 20 UDP ports with protocol-specific payloads (no -p needed)
+porthawk -t 192.168.1.1 --udp
+
+# Specific ports only
+porthawk -t 192.168.1.1 --udp -p 53,123,161,1900
+
+# Slow network or cross-internet target — give it more time
+porthawk -t 192.168.1.1 --udp --timeout 3.0
 ```
 
-UDP scanning is unreliable by nature. A port showing as "filtered" might actually be open —
-firewalls silently drop UDP packets, so PortHawk can't tell the difference between
-"open and ignoring you" and "firewall blocking."
+Unlike a basic "send empty bytes, wait for ICMP" scanner, this sends real protocol payloads:
+DNS queries, NTP client requests, SNMP GetRequests, SSDP M-SEARCHes. A lot of services ignore
+empty datagrams but will respond to a proper request.
+
+UDP state breakdown:
+- **OPEN** — got a response that validates against the expected protocol
+- **CLOSED** — ICMP port-unreachable received (definitively no service on that port)
+- **FILTERED** — no response after retries (firewall, or the host ignores unknown senders)
+
+`"unvalidated:"` in the banner means a response arrived but didn't match the protocol format.
+Still probably open — check manually.
 
 ---
 
@@ -538,12 +552,57 @@ Confidence thresholds: `≥0.70` → HIGH, `0.45–0.69` → MEDIUM, `<0.45` →
 
 ---
 
+## 18. UDP Scan — Python API
+
+**Scenario:** You want to integrate UDP scanning into your own tooling.
+
+```python
+import asyncio
+import porthawk
+
+# Scan the 20 most useful UDP ports
+ports = porthawk.get_udp_top_ports()
+results = asyncio.run(
+    porthawk.udp_scan_host("192.168.1.1", ports=ports, timeout=2.0)
+)
+
+# Print open ports with their banners
+for r in results:
+    if r.state.name == "OPEN":
+        print(f"  UDP/{r.port:5d}  {r.banner or '?'}")
+# e.g.:
+#   UDP/   53  DNS
+#   UDP/  123  NTP stratum=2 refid=GPS
+#   UDP/  161  SNMP agent
+#   UDP/ 1900  Server: UPnP/1.0 Linux | USN: uuid:abc...
+
+# Scan specific ports, more retries for unreliable links
+results = asyncio.run(
+    porthawk.udp_scan_host(
+        "192.168.1.1",
+        ports=[53, 123, 161, 500],
+        timeout=3.0,
+        retries=2,
+        max_concurrent=20,
+    )
+)
+
+# Mix TCP and UDP — combine results into one report
+tcp_results = asyncio.run(porthawk.scan("192.168.1.1", ports="common"))
+udp_results = asyncio.run(
+    porthawk.udp_scan_host("192.168.1.1", ports=porthawk.get_udp_top_ports())
+)
+all_results = tcp_results + udp_results
+```
+
+Port states returned by `udp_scan_host`:
+- `PortState.OPEN` — protocol response received and validated
+- `PortState.CLOSED` — ICMP port unreachable received
+- `PortState.FILTERED` — no response after all retries
+
+---
+
 ## Common Error Messages
-
-### `PermissionError: UDP scanning needs admin/root privileges`
-
-Run as Administrator on Windows (`runas /user:Administrator cmd`) or
-with sudo on Linux (`sudo porthawk ...`).
 
 ### `ValueError: Invalid port range 1024-80: must be 1–65535 with lo ≤ hi`
 

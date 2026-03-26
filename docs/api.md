@@ -663,6 +663,83 @@ class OsMatch:
 
 ---
 
+## UDP Scanning
+
+TCP scanners skip most UDP services. DNS, NTP, SNMP, NetBIOS, SSDP — all run over UDP. This module sends protocol-specific payloads and validates responses. It also detects closed ports via ICMP unreachable.
+
+```python
+import asyncio
+import porthawk
+
+# Scan the 20 most common UDP ports
+results = asyncio.run(
+    porthawk.udp_scan_host("192.168.1.1", ports=porthawk.get_udp_top_ports(), timeout=2.0)
+)
+
+# Specific ports with longer timeout for slow networks
+results = asyncio.run(
+    porthawk.udp_scan_host("192.168.1.1", ports=[53, 123, 161, 1900], timeout=3.0)
+)
+
+for r in results:
+    print(r.port, r.state, r.banner)
+    # 53   OPEN     DNS
+    # 123  OPEN     NTP stratum=2 refid=GPS
+    # 161  OPEN     SNMP agent
+    # 1900 OPEN     Server: UPnP/1.0 Linux/3.x | USN: uuid:...
+```
+
+### `porthawk.udp_scan_host()`
+
+```python
+async def udp_scan_host(
+    host: str,
+    ports: list[int],
+    timeout: float = 2.0,       # per-probe wait — UDP needs at least 1-2s
+    max_concurrent: int = 50,   # cap this low; UDP stacks don't love 500 simultaneous probes
+    retries: int = 1,           # one retry catches most packet loss
+) -> list[ScanResult]:
+```
+
+Returns a flat `list[ScanResult]`, one per port scanned. Port states:
+
+- `OPEN` — got a valid protocol response, or any response that passes basic validation
+- `CLOSED` — ICMP "port unreachable" received (Linux: `OSError(errno=111)`, Windows: `ConnectionResetError`)
+- `FILTERED` — no response after all retries (firewall, or host just ignores it)
+
+Raises `ValueError` if `ports` is empty.
+
+**Unvalidated responses:** If a response arrives but fails the protocol validator (e.g. a UDP proxy returning garbage), the port is still marked `OPEN` but `r.banner` is prefixed with `"unvalidated:"`. Better a false positive than a false negative.
+
+### Protocol payloads
+
+| Port | Protocol | Payload | Validator |
+|------|----------|---------|-----------|
+| 53 | DNS | A query for `google.com`, TX ID `0xDEAD` | QR bit set in response |
+| 67/68 | DHCP | — | — |
+| 69 | TFTP | RRQ for `motd` | Any opcode response |
+| 111 | RPCBind | 4 null bytes | Any response |
+| 123 | NTP | v3 client request (48 bytes) | Mode field = 4 or 5 |
+| 137 | NetBIOS | NBSTAT wildcard query | Response flag 0x8000 set |
+| 161 | SNMP | BER GetRequest for `sysDescr.0` | Response starts with `0x30` |
+| 500/4500 | IKE | v1 informational (28 bytes) | Any response |
+| 1900 | SSDP | M-SEARCH `ssdp:all` | Starts with `HTTP/1.` |
+| 5353/5355 | mDNS/LLMNR | PTR query with QU bit | DNS QR bit |
+
+Ports without a payload entry (67, 68, 514, 520, 1194) get an empty datagram. Still useful: ICMP unreachable means definitely closed, no response means filtered.
+
+### `porthawk.get_udp_top_ports()`
+
+```python
+def get_udp_top_ports(n: int | None = None) -> list[int]:
+```
+
+Returns the top 20 UDP ports (or first `n` if specified): DNS, DHCP, TFTP, RPCBind, NTP, NetBIOS, SNMP, IKE, Syslog, RIP, OpenVPN, SSDP, mDNS, LLMNR, Memcached, Steam/game servers.
+
+These are the ports a TCP scanner would completely miss. Good default for any UDP recon pass.
+
+---
+
 ## PyPI Publishing
 
 ```bash

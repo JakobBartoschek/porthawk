@@ -132,7 +132,9 @@ def test_public_api_exports():
     assert hasattr(porthawk, "InvalidPortSpecError")
     assert hasattr(porthawk, "ScanPermissionError")
     assert hasattr(porthawk, "ScanTimeoutError")
+    assert hasattr(porthawk, "udp_scan_host")
+    assert hasattr(porthawk, "get_udp_top_ports")
 
 
 def test_version_accessible():
-    assert porthawk.__version__ == "0.7.0"
+    assert porthawk.__version__ == "0.8.0"

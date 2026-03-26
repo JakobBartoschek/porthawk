@@ -33,8 +33,9 @@ from porthawk.reporter import ScanReport, build_report
 from porthawk.scanner import PortState, ScanResult
 from porthawk.syn_scan import get_syn_backend, syn_scan_host
 from porthawk.throttle import AdaptiveConfig, AdaptiveSemaphore, NetworkStats
+from porthawk.udp_scan import get_udp_top_ports, udp_scan_host
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 __author__ = "Jakob Bartoschek"
 __license__ = "MIT"
 
@@ -67,6 +68,9 @@ __all__ = [
     "ttl_only_os",
     "OsMatch",
     "OsFingerprint",
+    # UDP scanning
+    "udp_scan_host",
+    "get_udp_top_ports",
     # Adaptive throttling
     "AdaptiveConfig",
     "AdaptiveSemaphore",

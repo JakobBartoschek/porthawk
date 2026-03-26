@@ -23,7 +23,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 ## Features
 
 - **Async TCP scanning** via `asyncio` — 500 concurrent connections by default, configurable
-- **UDP scanning** via raw sockets (requires admin/root)
+- **UDP scanning** — protocol-specific payloads for DNS, NTP, SNMP, SSDP, NetBIOS, mDNS, IKE, TFTP. Validates responses, extracts banners. ICMP unreachable detection for closed ports. Defaults to top 20 UDP ports.
 - **OS fingerprinting** from TTL value — Linux/Unix, Windows, Network Device
 - **Service detection** — protocol-aware banner grabbing with version extraction for SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
 - **CVE lookup** via NVD API — version-aware: "OpenSSH 8.9" returns relevant CVEs, not just everything tagged "ssh". Two-layer cache (in-memory + disk, 24h TTL) to stay within rate limits
@@ -189,9 +189,16 @@ sudo porthawk -t 192.168.1.1 --common --slow-low --decoys "1.2.3.4,5.6.7.8"
 sudo porthawk -t 192.168.1.1 --common --passive-os
 ```
 
-**UDP scan (requires admin/root):**
+**UDP scan — protocol-aware, defaults to top 20 UDP ports:**
 ```bash
-sudo porthawk -t 192.168.1.1 -p 53,161,123 --udp
+# Top 20 UDP ports with protocol-specific payloads
+porthawk -t 192.168.1.1 --udp
+
+# Specific ports only
+porthawk -t 192.168.1.1 --udp -p 53,123,161,1900
+
+# Slower networks — bump the timeout
+porthawk -t 192.168.1.1 --udp --timeout 3.0
 ```
 
 **Disable the live UI (for scripts, pipes, CI):**
@@ -300,6 +307,21 @@ match = porthawk.fingerprint_os(raw_pkt)
 match = porthawk.ttl_only_os(64)  # → "Linux/Unix"
 ```
 
+```python
+# UDP scan — protocol-specific payloads, ICMP unreachable detection
+results = asyncio.run(
+    porthawk.udp_scan_host("192.168.1.1", ports=[53, 123, 161, 1900], timeout=2.0)
+)
+for r in results:
+    print(r.port, r.state, r.banner)
+    # e.g. 53 OPEN "DNS"
+    # e.g. 123 OPEN "NTP stratum=2 refid=GPS"
+
+# Default top 20 UDP ports (DNS, NTP, SNMP, NetBIOS, SSDP, IKE, mDNS, ...)
+ports = porthawk.get_udp_top_ports()
+results = asyncio.run(porthawk.udp_scan_host("192.168.1.1", ports=ports))
+```
+
 Full API reference: [`docs/api.md`](docs/api.md)
 
 ---
@@ -314,7 +336,7 @@ Full API reference: [`docs/api.md`](docs/api.md)
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -390,6 +412,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] SYN scan — half-open TCP via Scapy or raw sockets
 - [x] IDS/IPS evasion — Slow & Low mode: IP fragmentation, jitter, decoys, custom TCP flags
 - [x] Passive OS fingerprinting — TCP stack analysis from SYN-ACK, rule-based + KNN classifier
+- [x] UDP scanning — protocol-specific payloads, ICMP unreachable detection, 8 protocols
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
