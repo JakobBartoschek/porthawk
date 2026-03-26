@@ -5,7 +5,11 @@ If this file grows past 200 lines, split it.
 """
 
 import asyncio
-from typing import Annotated
+import os
+from typing import TYPE_CHECKING, Annotated
+
+if TYPE_CHECKING:
+    import porthawk.diff as porthawk_diff
 
 import typer
 from rich.console import Console
@@ -610,6 +614,148 @@ def _print_passive_os(host: str) -> None:
     )
     if result.matched_signals:
         console.print(f"  [dim]signals: {', '.join(result.matched_signals[:4])}[/dim]")
+
+
+@app.command()
+def diff(
+    file_a: Annotated[
+        str,
+        typer.Argument(help="Baseline scan: PortHawk JSON (.json) or Nmap XML (.xml)"),
+    ],
+    file_b: Annotated[
+        str,
+        typer.Argument(help="Current scan to compare against the baseline"),
+    ],
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Save diff as JSON to this path"),
+    ] = None,
+    show_stable: Annotated[
+        bool,
+        typer.Option("--show-stable", help="Also print unchanged open ports"),
+    ] = False,
+    only_new: Annotated[
+        bool,
+        typer.Option("--only-new", help="Only show newly opened ports"),
+    ] = False,
+    exit_on_new: Annotated[
+        bool,
+        typer.Option(
+            "--exit-on-new",
+            help="Exit with code 1 if any new open ports were found (useful in CI)",
+        ),
+    ] = False,
+) -> None:
+    """Compare two port scans and show what changed.
+
+    Both files can be PortHawk JSON reports (-o json) or Nmap XML (-oX).
+    Mix and match freely.
+
+    Examples:
+      porthawk diff old.json new.json
+      porthawk diff baseline.xml current.json --exit-on-new
+      porthawk diff nmap_monday.xml nmap_friday.xml -o diff.json
+    """
+    from porthawk.diff import compute_diff, load_results, save_diff_json
+
+    try:
+        results_a = load_results(file_a)
+    except (FileNotFoundError, ValueError) as exc:
+        err_console.print(f"Cannot read {file_a}: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    try:
+        results_b = load_results(file_b)
+    except (FileNotFoundError, ValueError) as exc:
+        err_console.print(f"Cannot read {file_b}: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    label_a = os.path.basename(file_a)
+    label_b = os.path.basename(file_b)
+
+    scan_diff = compute_diff(
+        results_a,
+        results_b,
+        label_a=label_a,
+        label_b=label_b,
+        include_stable=show_stable,
+    )
+
+    _print_diff(scan_diff, only_new=only_new)
+
+    if output:
+        path = save_diff_json(
+            scan_diff, output_path=None if output == "-" else __import__("pathlib").Path(output)
+        )
+        console.print(f"\n  [green]JSON:[/green] {path}")
+
+    if exit_on_new and scan_diff.new_ports:
+        raise typer.Exit(code=1)
+
+
+def _print_diff(diff: "porthawk_diff.ScanDiff", only_new: bool = False) -> None:
+    """Render a ScanDiff to the terminal."""
+    console.print(
+        f"\n[bold cyan]PortHawk Diff[/bold cyan] — "
+        f"[dim]{diff.label_a}[/dim] vs [dim]{diff.label_b}[/dim]\n"
+    )
+
+    new = diff.new_ports
+    gone = diff.gone_ports
+    changed = diff.changed_ports
+    stable = diff.stable_ports
+
+    if new:
+        console.print(f"[bold green]  NEW ({len(new)} port(s) opened):[/bold green]")
+        for c in sorted(new, key=lambda x: (x.host, x.port)):
+            risk = c.after.risk_level if c.after else None
+            risk_color = {"HIGH": "red", "MEDIUM": "yellow", "LOW": "green"}.get(risk or "", "dim")
+            svc = c.after.service_name if c.after else "unknown"
+            ver = f" {c.after.service_version}" if c.after and c.after.service_version else ""
+            console.print(
+                f"    [green]+[/green] {c.host}:{c.port}/{c.protocol}"
+                f"  {svc}{ver}"
+                f"  [[{risk_color}]{risk or 'unclassified'}[/{risk_color}]]"
+            )
+
+    if not only_new:
+        if gone:
+            console.print(f"\n[bold red]  GONE ({len(gone)} port(s) closed):[/bold red]")
+            for c in sorted(gone, key=lambda x: (x.host, x.port)):
+                risk = c.before.risk_level if c.before else None
+                risk_color = {"HIGH": "red", "MEDIUM": "yellow", "LOW": "green"}.get(
+                    risk or "", "dim"
+                )
+                svc = c.before.service_name if c.before else "unknown"
+                console.print(
+                    f"    [red]-[/red] {c.host}:{c.port}/{c.protocol}"
+                    f"  {svc}"
+                    f"  [[{risk_color}]{risk or 'unclassified'}[/{risk_color}]]"
+                )
+
+        if changed:
+            console.print(f"\n[bold yellow]  CHANGED ({len(changed)} port(s)):[/bold yellow]")
+            for c in sorted(changed, key=lambda x: (x.host, x.port)):
+                console.print(f"    [yellow]~[/yellow] {c.describe().lstrip('~ ')}")
+
+        if stable:
+            console.print(f"\n[dim]  STABLE  ({len(stable)} port(s) unchanged)[/dim]")
+            for c in sorted(stable, key=lambda x: (x.host, x.port)):
+                console.print(f"  [dim]{c.describe()}[/dim]")
+
+    # summary line
+    total = len(new) + len(gone) + len(changed)
+    if total == 0:
+        console.print("  [dim]No differences found — scans are identical[/dim]")
+    else:
+        parts = []
+        if new:
+            parts.append(f"[green]{len(new)} new[/green]")
+        if gone:
+            parts.append(f"[red]{len(gone)} gone[/red]")
+        if changed:
+            parts.append(f"[yellow]{len(changed)} changed[/yellow]")
+        console.print(f"\n  Summary: {', '.join(parts)}")
 
 
 def main() -> None:
