@@ -422,6 +422,64 @@ from npcap.com and run `pip install porthawk[syn]`.
 
 ---
 
+## 16. Slow & Low — Evasion Scan
+
+Red-team mode. All the evasion techniques combined. Requires root/admin and Scapy.
+
+```bash
+pip install porthawk[syn]
+
+# Full preset — randomized timing, IP fragments, TTL=128
+sudo porthawk -t 192.168.1.1 --common --slow-low
+
+# XMAS scan with 10s max jitter
+sudo porthawk -t 192.168.1.1 -p 80,443 --evasion-type xmas --jitter 10.0
+
+# Fragment packets + decoys
+sudo porthawk -t 192.168.1.1 --common --fragment --decoys "1.2.3.4,5.6.7.8"
+
+# Everything at once
+sudo porthawk -t 192.168.1.1 --common --slow-low --evasion-type fin --decoys "1.2.3.4,5.6.7.8"
+```
+
+Programmatic evasion:
+
+```python
+import asyncio
+import porthawk
+
+# slow & low preset — ready to go
+cfg = porthawk.slow_low_config()
+cfg.decoys = ["1.2.3.4", "5.6.7.8"]
+
+results = asyncio.run(
+    porthawk.evasion_scan_host("192.168.1.1", [22, 80, 443, 3306], config=cfg, max_concurrent=2)
+)
+
+# XMAS scan — RST=CLOSED, no reply=OPEN (unreliable against Windows)
+cfg = porthawk.EvasionConfig(
+    scan_type="xmas",
+    max_delay=5.0,
+    jitter_distribution="exponential",
+    fragment=True,
+)
+results = asyncio.run(porthawk.evasion_scan_host("192.168.1.1", [80, 443], config=cfg))
+
+# ACK scan — maps firewall rules, not port state
+cfg = porthawk.EvasionConfig(scan_type="ack")
+results = asyncio.run(porthawk.evasion_scan_host("192.168.1.1", range(1, 1025), config=cfg))
+# OPEN = unfiltered (RST received), FILTERED = stateful firewall dropped it
+```
+
+**Why each technique works:**
+- **Fragmented packets** — many IDS engines only inspect the first fragment. Split the TCP header into 8-byte chunks and signature-based IDS misses the port/flag check entirely.
+- **Exponential jitter** — inter-arrival times follow a Poisson distribution. Looks like real user traffic hitting a service, defeats threshold-based "N connections in T seconds" rules.
+- **Decoys** — target sees scans from multiple source IPs simultaneously. Analyst has to figure out which one is real. Doesn't bypass host-based firewalls, but obscures source in network logs.
+- **TTL=128** — passive OS fingerprinting (p0f, Zeek) will misidentify you as Windows. Breaks correlation with other scan data from the same session.
+- **FIN/NULL/XMAS** — some older IDS only alert on SYN packets. These bypass those rules. Unreliable against Windows targets (sends RST for both open and closed ports, ignoring RFC 793).
+
+---
+
 ## Common Error Messages
 
 ### `PermissionError: UDP scanning needs admin/root privileges`

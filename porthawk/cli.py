@@ -12,6 +12,7 @@ from rich.console import Console
 
 from porthawk import __version__
 from porthawk.cve import lookup_cves
+from porthawk.evasion import EvasionConfig, evasion_scan_host, slow_low_config
 from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_from_ttl
 from porthawk.honeypot import score_honeypot
 from porthawk.predictor import get_sklearn_status, sort_ports
@@ -112,6 +113,45 @@ def scan(
             help="Half-open SYN scan (requires root/admin + Scapy or Linux raw sockets)",
         ),
     ] = False,
+    slow_low: Annotated[
+        bool,
+        typer.Option(
+            "--slow-low",
+            help="Red-team evasion mode: randomized timing, IP fragmentation, TTL=128. "
+            "Requires root/admin + Scapy or Linux raw sockets.",
+        ),
+    ] = False,
+    evasion_type: Annotated[
+        str | None,
+        typer.Option(
+            "--evasion-type",
+            help="TCP flag combo for evasion scan: syn, fin, null, xmas, ack, maimon",
+        ),
+    ] = None,
+    jitter: Annotated[
+        float,
+        typer.Option(
+            "--jitter",
+            help="Max random delay between probes in seconds (evasion mode). "
+            "Actual delay is uniform [0, jitter].",
+        ),
+    ] = 0.0,
+    fragment: Annotated[
+        bool,
+        typer.Option(
+            "--fragment",
+            help="Fragment IP packets into 8-byte chunks (evasion mode). "
+            "Confuses IDS engines that don't reassemble fragments.",
+        ),
+    ] = False,
+    decoys: Annotated[
+        str | None,
+        typer.Option(
+            "--decoys",
+            help="Comma-separated list of decoy source IPs (Scapy required). "
+            "Example: --decoys '1.2.3.4,5.6.7.8'",
+        ),
+    ] = None,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -124,6 +164,8 @@ def scan(
       porthawk -t 10.0.0.0/24 --top-ports 100
       porthawk -t 192.168.1.1 --full --stealth
       sudo porthawk -t 192.168.1.1 --common --syn
+      sudo porthawk -t 192.168.1.1 --common --slow-low
+      sudo porthawk -t 192.168.1.1 -p 80,443 --evasion-type xmas --jitter 5.0
     """
     # Stealth mode overrides threads and timeout — user probably knows what they're doing
     if stealth:
@@ -131,14 +173,16 @@ def scan(
         timeout = 3.0
         console.print("[yellow]Stealth mode: 1 thread, 3s timeout[/yellow]")
 
+    use_evasion = slow_low or evasion_type is not None or jitter > 0 or fragment or decoys
+
     port_list = _resolve_port_list(ports, top_ports, full, common)
     if port_list is None:
         err_console.print("Specify ports with -p, --top-ports N, --common, or --full")
         raise typer.Exit(code=1)
 
     targets = expand_cidr(target)
-    # --syn forces TCP and overrides --udp
-    protocol = "udp" if (udp and not syn) else "tcp"
+    # evasion and SYN modes force TCP; --udp only applies to regular TCP connect scans
+    protocol = "udp" if (udp and not syn and not use_evasion) else "tcp"
 
     if smart_order:
         # Quick OS ping before the scan — gives the predictor a useful context signal.
@@ -152,14 +196,27 @@ def scan(
             f"[dim]Smart order active ({get_sklearn_status()}) " f"— first 5: {port_list[:5]}[/dim]"
         )
 
-    scan_label = "SYN" if syn else protocol.upper()
+    if use_evasion:
+        scan_label = f"EVASION/{(evasion_type or 'syn').upper()}"
+    elif syn:
+        scan_label = "SYN"
+    else:
+        scan_label = protocol.upper()
+
     console.print(
         f"\n[bold cyan]PortHawk[/bold cyan] — scanning [bold]{target}[/bold] "
         f"({len(targets)} host(s), {len(port_list)} port(s), {scan_label})\n"
     )
 
-    if syn:
+    if syn and not use_evasion:
         console.print(f"[dim]SYN scan backend: {get_syn_backend()}[/dim]")
+
+    if use_evasion:
+        console.print(f"[dim]Evasion backend: {get_syn_backend()}[/dim]")
+        if slow_low:
+            console.print(
+                "[dim]Slow & Low preset active: randomized timing, fragmentation, TTL=128[/dim]"
+            )
 
     adaptive_cfg = AdaptiveConfig() if adaptive else None
 
@@ -174,7 +231,12 @@ def scan(
     from porthawk.exceptions import ScanPermissionError as _ScanPermErr
 
     try:
-        if syn:
+        if use_evasion:
+            evasion_cfg = _build_evasion_config(slow_low, evasion_type, jitter, fragment, decoys)
+            flat_results = asyncio.run(
+                _run_evasion_scan(targets, port_list, evasion_cfg, timeout, min(threads, 20))
+            )
+        elif syn:
             # SYN scan bypasses the normal scan path entirely
             flat_results = asyncio.run(
                 _run_syn_scan(targets, port_list, timeout, min(threads, 100))
@@ -299,6 +361,57 @@ async def _run_syn_scan(
     for host in targets:
         results = await syn_scan_host(
             host, port_list, timeout=timeout, max_concurrent=max_concurrent
+        )
+        all_results.extend(results)
+    return all_results
+
+
+def _build_evasion_config(
+    slow_low: bool,
+    evasion_type: str | None,
+    jitter: float,
+    fragment: bool,
+    decoys: str | None,
+) -> EvasionConfig:
+    """Turn CLI evasion flags into an EvasionConfig.
+
+    --slow-low loads the paranoid preset and then individual flags override it.
+    Without --slow-low, explicit flags build the config from scratch.
+    """
+    if slow_low:
+        cfg = slow_low_config()
+        if evasion_type is not None:
+            cfg.scan_type = evasion_type
+        if jitter > 0:
+            cfg.max_delay = jitter
+            cfg.min_delay = 0.0
+        if fragment:
+            cfg.fragment = True
+    else:
+        cfg = EvasionConfig(
+            scan_type=evasion_type or "syn",
+            max_delay=jitter,
+            fragment=fragment,
+        )
+
+    if decoys:
+        cfg.decoys = [d.strip() for d in decoys.split(",") if d.strip()]
+
+    return cfg
+
+
+async def _run_evasion_scan(
+    targets: list[str],
+    port_list: list[int],
+    config: EvasionConfig,
+    timeout: float,
+    max_concurrent: int,
+) -> list:
+    """Run evasion scan against all targets and return a flat result list."""
+    all_results = []
+    for host in targets:
+        results = await evasion_scan_host(
+            host, port_list, config=config, timeout=timeout, max_concurrent=max_concurrent
         )
         all_results.extend(results)
     return all_results
