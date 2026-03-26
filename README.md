@@ -65,12 +65,14 @@ flowchart TD
 ## Installation
 
 ```bash
-# Clone and install
+pip install porthawk
+```
+
+Or from source:
+
+```bash
 git clone https://github.com/JakobBartoschek/porthawk
 cd porthawk
-pip install -r requirements.txt
-
-# Or install as a package (adds porthawk to PATH)
 pip install .
 ```
 
@@ -80,32 +82,32 @@ pip install .
 
 **Scan top 100 ports on a single host:**
 ```bash
-porthawk scan -t 192.168.1.1 --common
+porthawk -t 192.168.1.1 --common
 ```
 
 **Banner grabbing with OS detection, save to JSON and HTML:**
 ```bash
-porthawk scan -t 192.168.1.1 -p 1-1024 --banners --os -o json,html
+porthawk -t 192.168.1.1 -p 1-1024 --banners --os -o json,html
 ```
 
 **Scan a /24 network, top 50 ports:**
 ```bash
-porthawk scan -t 192.168.1.0/24 --top-ports 50
+porthawk -t 192.168.1.0/24 --top-ports 50
 ```
 
 **Full port scan with custom timeout and thread limit:**
 ```bash
-porthawk scan -t scanme.nmap.org --full --timeout 2.0 --threads 200
+porthawk -t scanme.nmap.org --full --timeout 2.0 --threads 200
 ```
 
 **Stealth mode — slow, single-threaded, 3s timeout:**
 ```bash
-porthawk scan -t 10.0.0.1 --common --stealth
+porthawk -t 10.0.0.1 --common --stealth
 ```
 
-**UDP scan with banner grabbing (requires admin/root):**
+**UDP scan (requires admin/root):**
 ```bash
-sudo porthawk scan -t 192.168.1.1 -p 53,161,123 --udp
+sudo porthawk -t 192.168.1.1 -p 53,161,123 --udp
 ```
 
 **Example terminal output:**
@@ -125,6 +127,37 @@ PortHawk — scanning 192.168.1.1 (1 host, 100 ports, TCP)
   └───────────┴──────────┴────────────────────┴──────────┴────────────────────┘
   Open: 5 / 100 scanned
 ```
+
+---
+
+## Python API
+
+PortHawk works as a library too. No CLI required.
+
+```python
+import asyncio
+import porthawk
+
+# Simple scan — returns a list of open ports
+results = asyncio.run(porthawk.scan("192.168.1.1", ports="common"))
+for r in results:
+    print(f"{r.port}/{r.protocol}  {r.service_name}  {r.risk_level}")
+```
+
+```python
+# Context manager — useful when scanning the same target multiple times
+async with porthawk.Scanner("192.168.1.1", timeout=2.0) as scanner:
+    web   = await scanner.scan(ports="80,443,8080,8443", banners=True)
+    infra = await scanner.scan(ports="22,3306,5432,6379")
+```
+
+```python
+# Build a report and export it
+report   = porthawk.build_report("192.168.1.1", results)
+html_path = porthawk.reporter.save_html(report)
+```
+
+Full API reference: [`docs/api.md`](docs/api.md)
 
 ---
 
