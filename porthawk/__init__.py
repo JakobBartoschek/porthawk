@@ -1,8 +1,51 @@
 """PortHawk — async port scanner for authorized security testing.
 
 Scan responsibly. Get written permission first.
+
+Quick start::
+
+    import asyncio
+    import porthawk
+
+    results = asyncio.run(porthawk.scan("192.168.1.1", ports="common"))
+    for r in results:
+        print(r.port, r.service_name, r.risk_level)
+
+Context manager::
+
+    async with porthawk.Scanner("192.168.1.1", timeout=2.0) as scanner:
+        results = await scanner.scan(ports="1-1024", banners=True)
 """
+
+from porthawk.api import Scanner, scan
+from porthawk.exceptions import (
+    InvalidPortSpecError,
+    InvalidTargetError,
+    PortHawkError,
+    ScanPermissionError,
+    ScanTimeoutError,
+)
+from porthawk.reporter import ScanReport, build_report
+from porthawk.scanner import PortState, ScanResult
 
 __version__ = "0.1.0"
 __author__ = "Jakob Bartoschek"
 __license__ = "MIT"
+
+__all__ = [
+    # Core API
+    "scan",
+    "Scanner",
+    # Data models
+    "ScanResult",
+    "ScanReport",
+    "PortState",
+    # Report builder (for custom rendering)
+    "build_report",
+    # Exceptions
+    "PortHawkError",
+    "InvalidTargetError",
+    "InvalidPortSpecError",
+    "ScanPermissionError",
+    "ScanTimeoutError",
+]
