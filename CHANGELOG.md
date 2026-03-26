@@ -5,6 +5,61 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [0.8.0] — 2026-03-26
+
+### UDP Scanner
+
+TCP scanners miss a lot. DNS, NTP, SNMP, NetBIOS, SSDP — all UDP. This adds a proper UDP scan module that sends protocol-specific payloads and validates responses. Not a simple "send empty bytes, wait for ICMP" — it actually speaks the protocols.
+
+**New module: `porthawk/udp_scan.py`**
+
+- `udp_scan_host(host, ports, timeout, max_concurrent, retries)` — async UDP scanner, returns flat `list[ScanResult]`
+- `get_udp_top_ports(n)` — returns the top 20 UDP ports worth scanning on first recon pass
+
+**Protocol-specific payloads (8 protocols):**
+- **DNS** (53, 5353, 5355): A record query for google.com, validates QR bit in response
+- **NTP** (123): v3 client request (48 bytes), validates mode field (4 or 5)
+- **SNMP** (161): BER-encoded GetRequest for `sysDescr.0` (OID 1.3.6.1.2.1.1.1.0), community "public"
+- **SSDP** (1900): M-SEARCH `ssdp:all`, validates HTTP/1.1 response header
+- **NetBIOS** (137): NBSTAT query for wildcard `"*"`, nibble-encoded per RFC 1001
+- **mDNS** (5353, 5355): PTR query for `_services._dns-sd._udp.local`, QU bit set
+- **TFTP** (69): RRQ for "motd" — even a "file not found" error proves the service is up
+- **IKE** (500, 4500): minimal v1 informational exchange, 28 bytes
+
+**ICMP unreachable detection:**
+- Linux: `OSError(errno=111)` on the socket → port is `CLOSED`
+- Windows: `ConnectionResetError` → port is `CLOSED`
+- No response after retries → `FILTERED` (firewall or host just ignores it)
+
+**Timeout handling:**
+- 1 retry by default — UDP is lossy, one miss isn't conclusive
+- `asyncio.Semaphore` caps concurrency at 50 by default (UDP stacks get unhappy above that)
+- Per-port wait: `timeout * (retries + 1) + 1.0` — outer asyncio timeout prevents hung tasks
+
+**Banner extraction:**
+- NTP: stratum, reference ID, version
+- SNMP: decodes sysDescr string from BER response
+- SSDP: extracts `Server:` and `USN:` headers
+- TFTP: translates opcode (ACK, DATA, ERROR) to human string
+- DNS/NetBIOS: service name
+- Generic: first 40 printable bytes
+
+**Unvalidated responses:**
+- If a response arrives but fails the protocol validator, port is still marked `OPEN` but banner is prefixed with `"unvalidated:"` — better than false negatives
+
+**CLI:**
+- `--udp` now routes through `udp_scan_host()` instead of the old generic UDP path
+- `--udp` without `-p` defaults to `get_udp_top_ports()` (top 20 UDP ports)
+- Concurrency capped at 50 for UDP regardless of `--threads`
+
+**Public API:**
+- `porthawk.udp_scan_host` — in `__all__`
+- `porthawk.get_udp_top_ports` — in `__all__`
+
+**97 new tests in `tests/test_udp_scan.py`** — payload encoding, response validators, banner extraction, probe retry logic, full scan orchestration
+
+---
+
 ## [0.7.0] — 2026-03-26
 
 ### Passive OS Fingerprinting

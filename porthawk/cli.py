@@ -22,6 +22,7 @@ from porthawk.scanner import PortState, expand_cidr, parse_port_range
 from porthawk.service_db import get_service, get_top_ports
 from porthawk.syn_scan import get_syn_backend, syn_scan_host
 from porthawk.throttle import AdaptiveConfig
+from porthawk.udp_scan import get_udp_top_ports, udp_scan_host
 from porthawk.ui import LiveScanUI, is_interactive
 
 app = typer.Typer(
@@ -62,7 +63,14 @@ def scan(
     stealth: Annotated[
         bool, typer.Option("--stealth", help="Slow scan mode: 1 thread, 3s timeout")
     ] = False,
-    udp: Annotated[bool, typer.Option("--udp", help="UDP scan (requires root/admin)")] = False,
+    udp: Annotated[
+        bool,
+        typer.Option(
+            "--udp",
+            help="UDP scan with protocol-specific payloads (DNS, NTP, SNMP, SSDP, NetBIOS, mDNS, IKE, TFTP). "
+            "Uses top 20 UDP ports by default unless ports are specified explicitly.",
+        ),
+    ] = False,
     os_detect: Annotated[bool, typer.Option("--os", help="Attempt OS detection via TTL")] = False,
     banners: Annotated[
         bool, typer.Option("--banners", help="Grab service banners from open ports")
@@ -186,8 +194,12 @@ def scan(
 
     port_list = _resolve_port_list(ports, top_ports, full, common)
     if port_list is None:
-        err_console.print("Specify ports with -p, --top-ports N, --common, or --full")
-        raise typer.Exit(code=1)
+        if udp:
+            # --udp without explicit ports → scan the 20 ports most likely to have UDP services
+            port_list = get_udp_top_ports()
+        else:
+            err_console.print("Specify ports with -p, --top-ports N, --common, or --full")
+            raise typer.Exit(code=1)
 
     targets = expand_cidr(target)
     # evasion and SYN modes force TCP; --udp only applies to regular TCP connect scans
@@ -250,6 +262,10 @@ def scan(
             flat_results = asyncio.run(
                 _run_syn_scan(targets, port_list, timeout, min(threads, 100))
             )
+        elif udp:
+            # UDP path: protocol-specific payloads, ICMP unreachable detection
+            # cap concurrency lower than TCP — UDP responses are slower and less reliable
+            flat_results = asyncio.run(_run_udp_scan(targets, port_list, timeout, min(threads, 50)))
         elif use_live:
             with LiveScanUI(target, len(port_list) * len(targets), protocol) as ui:
                 all_results = asyncio.run(
@@ -410,6 +426,22 @@ def _build_evasion_config(
         cfg.decoys = [d.strip() for d in decoys.split(",") if d.strip()]
 
     return cfg
+
+
+async def _run_udp_scan(
+    targets: list[str],
+    port_list: list[int],
+    timeout: float,
+    max_concurrent: int,
+) -> list:
+    """Run UDP scan against all targets and return a flat result list."""
+    all_results = []
+    for host in targets:
+        results = await udp_scan_host(
+            host, port_list, timeout=timeout, max_concurrent=max_concurrent
+        )
+        all_results.extend(results)
+    return all_results
 
 
 async def _run_evasion_scan(
