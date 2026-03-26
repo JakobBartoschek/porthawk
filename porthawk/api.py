@@ -153,7 +153,7 @@ class Scanner:
         self.concurrency = concurrency
         self.udp = udp
 
-    async def __aenter__(self) -> "Scanner":
+    async def __aenter__(self) -> Scanner:
         return self
 
     async def __aexit__(
