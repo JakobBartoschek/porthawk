@@ -80,10 +80,10 @@ async def _attach_cves(results: list[ScanResult]) -> None:
     for r in results:
         if r.state != PortState.OPEN or not r.service_name:
             continue
-        svc = r.service_name
-        if svc not in seen:
-            seen[svc] = await lookup_cves(svc)
-        r.cves = [c.model_dump() for c in seen[svc]]
+        dedup_key = f"{r.service_name}:{r.service_version or ''}"
+        if dedup_key not in seen:
+            seen[dedup_key] = await lookup_cves(r.service_name, service_version=r.service_version)
+        r.cves = [c.model_dump() for c in seen[dedup_key]]
 
 
 async def scan(

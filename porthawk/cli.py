@@ -274,17 +274,19 @@ def _enrich_results(
 async def _attach_cves(results: list) -> None:
     """Fetch CVEs for each unique open-port service and attach them to results.
 
-    Deduplicates by service name — 10 open Redis ports = 1 NVD API call.
+    Deduplicates by (service_name, service_version) — same version on multiple ports
+    = 1 API call. Different versions of the same service get separate lookups.
     """
     open_results = [r for r in results if r.state == PortState.OPEN and r.service_name]
     seen: dict[str, list[dict]] = {}
 
     for r in open_results:
-        svc = r.service_name
-        if svc not in seen:
-            cves = await lookup_cves(svc)
-            seen[svc] = [c.model_dump() for c in cves]
-        r.cves = seen[svc]
+        # version-aware dedup key — "ssh:OpenSSH_8.9p1" and "ssh:OpenSSH_9.0" are different
+        dedup_key = f"{r.service_name}:{r.service_version or ''}"
+        if dedup_key not in seen:
+            cves = await lookup_cves(r.service_name, service_version=r.service_version)
+            seen[dedup_key] = [c.model_dump() for c in cves]
+        r.cves = seen[dedup_key]
 
 
 def _save_outputs(report, output: str | None) -> None:
