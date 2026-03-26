@@ -18,6 +18,7 @@ from porthawk.predictor import get_sklearn_status, sort_ports
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
 from porthawk.service_db import get_service, get_top_ports
+from porthawk.throttle import AdaptiveConfig
 from porthawk.ui import LiveScanUI, is_interactive
 
 app = typer.Typer(
@@ -96,6 +97,13 @@ def scan(
             help="Score the target for honeypot likelihood after scanning",
         ),
     ] = False,
+    adaptive: Annotated[
+        bool,
+        typer.Option(
+            "--adaptive",
+            help="Adaptive concurrency: starts slow, ramps up on stable networks, backs off on congestion",
+        ),
+    ] = False,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -139,16 +147,34 @@ def scan(
         f"({len(targets)} host(s), {len(port_list)} port(s), {protocol.upper()})\n"
     )
 
+    adaptive_cfg = AdaptiveConfig() if adaptive else None
+
+    if adaptive:
+        console.print(
+            f"[dim]Adaptive mode: starting at {AdaptiveConfig().initial_concurrency} concurrent, "
+            f"ramping toward {threads}[/dim]"
+        )
+
     use_live = not no_live and is_interactive()
 
     try:
         if use_live:
             with LiveScanUI(target, len(port_list) * len(targets), protocol) as ui:
                 all_results = asyncio.run(
-                    _run_scan(targets, port_list, timeout, threads, udp, on_result=ui.on_result)
+                    _run_scan(
+                        targets,
+                        port_list,
+                        timeout,
+                        threads,
+                        udp,
+                        on_result=ui.on_result,
+                        adaptive_cfg=adaptive_cfg,
+                    )
                 )
         else:
-            all_results = asyncio.run(_run_scan(targets, port_list, timeout, threads, udp))
+            all_results = asyncio.run(
+                _run_scan(targets, port_list, timeout, threads, udp, adaptive_cfg=adaptive_cfg)
+            )
     except PermissionError as exc:
         err_console.print(f"Permission error: {exc}")
         raise typer.Exit(code=1) from exc
@@ -221,6 +247,7 @@ async def _run_scan(
     threads: int,
     udp: bool,
     on_result=None,
+    adaptive_cfg: AdaptiveConfig | None = None,
 ) -> dict[str, list]:
     """Async wrapper — keeps the asyncio.run() call in main() clean."""
     from porthawk.scanner import scan_targets
@@ -234,6 +261,7 @@ async def _run_scan(
         udp=udp,
         show_progress=on_result is None,
         on_result=on_result,
+        adaptive_config=adaptive_cfg,
     )
 
 

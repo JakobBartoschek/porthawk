@@ -14,6 +14,8 @@ from enum import Enum
 from pydantic import BaseModel, field_validator
 from tqdm.asyncio import tqdm as async_tqdm
 
+from porthawk.throttle import AdaptiveConfig, AdaptiveSemaphore
+
 
 class PortState(str, Enum):
     OPEN = "open"
@@ -80,11 +82,17 @@ async def scan_tcp_port(
     host: str,
     port: int,
     timeout: float,
-    semaphore: asyncio.Semaphore,
+    semaphore: asyncio.Semaphore | AdaptiveSemaphore,
 ) -> ScanResult:
     """Scan one TCP port. Semaphore keeps us from opening 50k connections at once."""
     async with semaphore:
         state, latency = await _tcp_probe(host, port, timeout)
+        # feed result back to adaptive controller if one is in use
+        if isinstance(semaphore, AdaptiveSemaphore):
+            # FILTERED means timeout — genuine congestion signal vs. just a closed firewall port.
+            # We treat it as a timeout regardless of cause: if you're overloading the network,
+            # FILTERED rate spikes and the controller backs off. That's the right behavior.
+            semaphore.record_probe(latency, timed_out=(state == PortState.FILTERED))
         return ScanResult(
             host=host,
             port=port,
@@ -123,7 +131,7 @@ async def scan_udp_port(
     host: str,
     port: int,
     timeout: float,
-    semaphore: asyncio.Semaphore,
+    semaphore: asyncio.Semaphore | AdaptiveSemaphore,
 ) -> ScanResult:
     """UDP scan. Requires root on Linux or admin on Windows — raises PermissionError otherwise."""
     async with semaphore:
@@ -205,6 +213,7 @@ async def scan_host(
     udp: bool = False,
     show_progress: bool = True,
     on_result: Callable[[ScanResult], None] | None = None,
+    adaptive_config: AdaptiveConfig | None = None,
 ) -> list[ScanResult]:
     """Scan all ports on a single host. Filters nothing — returns open, closed, and filtered.
 
@@ -212,11 +221,21 @@ async def scan_host(
 
     on_result: called for each port the instant it finishes — used by LiveScanUI
                to update the display in real time. Disables tqdm when set.
+
+    adaptive_config: if set, uses AdaptiveSemaphore instead of plain asyncio.Semaphore.
+               Starts at adaptive_config.initial_concurrency and ramps up toward max_concurrent.
     """
     if not ports:
         raise ValueError("Port list is empty — nothing to scan")
 
-    semaphore = asyncio.Semaphore(max_concurrent)
+    if adaptive_config is not None and not udp:
+        # UDP doesn't benefit much from adaptive control — latency is unreliable anyway
+        semaphore: asyncio.Semaphore | AdaptiveSemaphore = AdaptiveSemaphore(
+            cfg=adaptive_config,
+            max_concurrency=max_concurrent,
+        )
+    else:
+        semaphore = asyncio.Semaphore(max_concurrent)
 
     if udp:
         tasks = [scan_udp_port(host, p, timeout, semaphore) for p in ports]
@@ -249,10 +268,12 @@ async def scan_targets(
     udp: bool = False,
     show_progress: bool = True,
     on_result: Callable[[ScanResult], None] | None = None,
+    adaptive_config: AdaptiveConfig | None = None,
 ) -> dict[str, list[ScanResult]]:
     """Scan multiple hosts sequentially (parallel host scanning is overkill for v0.1.0).
 
     Returns {host_ip: [ScanResult, ...]} for all targets.
+    Each host gets a fresh AdaptiveSemaphore — network conditions per host are independent.
     """
     all_results: dict[str, list[ScanResult]] = {}
     for target in targets:
@@ -264,6 +285,7 @@ async def scan_targets(
             udp=udp,
             show_progress=show_progress,
             on_result=on_result,
+            adaptive_config=adaptive_config,
         )
         all_results[target] = host_results
     return all_results

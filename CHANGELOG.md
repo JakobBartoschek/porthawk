@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [0.4.0] — 2026-03-26
+
+### Adaptive Scan Speed
+
+- `AdaptiveSemaphore` — drops in place of `asyncio.Semaphore`, adjusts concurrency limit at runtime based on observed network conditions
+- AIMD control loop: additive increase every N clean probes, multiplicative decrease (×0.5) when timeout ratio exceeds threshold
+- RFC 6298 RTT smoothing: SRTT via EWMA (α=0.125), RTTVAR via EWMA (β=0.25) — same math as TCP retransmit timer
+- High RTTVAR hold: if jitter exceeds `rttvar_threshold`, increases pause until the network settles
+- Decrease cooldown: prevents thrash — minimum gap between consecutive decreases
+- `NetworkStats`: sliding window (configurable size) tracking per-probe timeout flag and latency; computes `timeout_ratio` and exposes `srtt`/`rttvar` for monitoring
+- `AdaptiveConfig` dataclass: all AIMD tuning knobs with sensible defaults (initial=25, min=5, ai_step=2, md_factor=0.5, timeout_threshold=0.30, rttvar_threshold=80ms)
+- `--adaptive` CLI flag: starts at 25 concurrent, ramps toward `--threads` limit (default 500)
+- `scan_host()` and `scan_targets()` accept `adaptive_config: AdaptiveConfig | None` — pass `None` (default) to keep existing fixed-concurrency behavior
+- `AdaptiveConfig`, `AdaptiveSemaphore`, `NetworkStats` exported from public API
+- 35 new tests in `tests/test_throttle.py`
+
+---
+
 ## [0.3.0] — 2026-03-26
 
 ### Honeypot Detection

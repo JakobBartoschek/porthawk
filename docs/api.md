@@ -340,6 +340,77 @@ Detected patterns:
 
 ---
 
+## Adaptive Scan Speed
+
+Pass `adaptive_config` to `scan_host()` or `scan_targets()` to enable AIMD concurrency control.
+The semaphore starts at `initial_concurrency` and ramps toward `max_concurrent` as the network proves stable.
+
+```python
+import asyncio
+import porthawk
+from porthawk.throttle import AdaptiveConfig
+from porthawk.scanner import scan_host
+
+cfg = AdaptiveConfig(
+    initial_concurrency=25,  # start conservative
+    min_concurrency=5,
+    ai_step=2,               # add 2 slots every 30 clean probes
+    md_factor=0.5,           # halve on congestion
+    timeout_threshold=0.30,  # >30% timeouts = congestion
+    rttvar_threshold=80.0,   # ms — high jitter = hold steady
+)
+
+results = asyncio.run(scan_host(
+    "192.168.1.1",
+    ports=list(range(1, 1025)),
+    max_concurrent=500,
+    adaptive_config=cfg,
+))
+```
+
+### `AdaptiveConfig`
+
+```python
+@dataclass
+class AdaptiveConfig:
+    initial_concurrency: int = 25    # starting cwnd
+    min_concurrency: int = 5         # floor — never go below this
+    ai_step: int = 2                 # slots added per increase cycle
+    md_factor: float = 0.5           # multiplicative decrease factor
+    timeout_threshold: float = 0.30  # timeout ratio that triggers decrease
+    rttvar_threshold: float = 80.0   # ms — RTTVAR above this pauses increases
+    increase_interval: int = 30      # probes between increases on stable network
+    decrease_cooldown: float = 1.0   # seconds between consecutive decreases
+    min_samples: int = 10            # observations needed before AIMD acts
+    window_size: int = 50            # sliding window size for timeout ratio
+```
+
+### `NetworkStats`
+
+Exposed via `AdaptiveSemaphore.stats` — useful for logging or custom monitoring.
+
+```python
+@dataclass
+class NetworkStats:
+    srtt: float | None    # smoothed RTT (ms), RFC 6298 EWMA
+    rttvar: float         # RTT variance (ms), RFC 6298 EWMA
+
+    # methods
+    def record(latency_ms: float, timed_out: bool) -> None: ...
+
+    # properties
+    timeout_ratio: float  # fraction of window that timed out
+    sample_count: int     # total observations in current window
+```
+
+AIMD algorithm:
+- **Additive increase**: every `increase_interval` probes with no congestion → `cwnd += ai_step`
+- **Hold**: RTTVAR > `rttvar_threshold` → pause increases (jitter, not congestion)
+- **Multiplicative decrease**: `timeout_ratio > timeout_threshold` → `cwnd = max(min, cwnd * md_factor)`
+- Score combination is independent — decrease respects `decrease_cooldown` to prevent thrash
+
+---
+
 ## PyPI Publishing
 
 ```bash

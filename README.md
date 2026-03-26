@@ -29,6 +29,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 - **CVE lookup** via NVD API — version-aware: "OpenSSH 8.9" returns relevant CVEs, not just everything tagged "ssh". Two-layer cache (in-memory + disk, 24h TTL) to stay within rate limits
 - **ML port prioritization** — logistic regression trained on internet-wide scan frequencies, adjusts for private IP ranges and OS hint (`pip install porthawk[ml]`)
 - **Honeypot detection** — scores a host 0.0–1.0 for honeypot likelihood based on banner signatures (Cowrie, Dionaea), ICS port patterns (Conpot), port count (T-Pot), latency uniformity, and more
+- **Adaptive scan speed** — AIMD concurrency control: starts conservative, ramps up on stable networks, backs off when timeouts spike. RFC 6298 SRTT/RTTVAR for jitter detection.
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -52,6 +53,7 @@ flowchart TD
     SDB["service_db.py"]
     CVE["cve.py"]
     HP["honeypot.py"]
+    TH["throttle.py"]
     EXC["exceptions.py"]
     REP["reporter.py"]
     OUT_JSON["JSON"]
@@ -63,7 +65,9 @@ flowchart TD
     CLI --> SCAN
     CLI --> CVE
     CLI --> HP
+    CLI --> TH
     API --> SCAN
+    SCAN --> TH
     API --> CVE
     API --> EXC
     SCAN --> FP
@@ -142,6 +146,11 @@ porthawk -t 10.0.0.1 --common --stealth --smart-order
 **Check if the target looks like a honeypot:**
 ```bash
 porthawk -t 10.0.0.1 --common --banners --honeypot
+```
+
+**Adaptive scan — ramps up concurrency automatically:**
+```bash
+porthawk -t 192.168.1.1 -p 1-1024 --adaptive
 ```
 
 **UDP scan (requires admin/root):**
@@ -234,7 +243,7 @@ Full API reference: [`docs/api.md`](docs/api.md)
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -306,6 +315,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] ML port prioritization via logistic regression
 - [x] Persistent CVE disk cache with TTL
 - [x] Honeypot detection — score-based detection for Cowrie, Dionaea, Conpot, T-Pot
+- [x] Adaptive scan speed — AIMD concurrency control with RFC 6298 RTT smoothing
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
