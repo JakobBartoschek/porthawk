@@ -13,6 +13,7 @@ from rich.console import Console
 from porthawk import __version__
 from porthawk.cve import lookup_cves
 from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_from_ttl
+from porthawk.predictor import get_sklearn_status, sort_ports
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
 from porthawk.service_db import get_service, get_top_ports
@@ -80,6 +81,13 @@ def scan(
         bool,
         typer.Option("--no-live", help="Disable live UI — use plain output (for pipes/scripts)"),
     ] = False,
+    smart_order: Annotated[
+        bool,
+        typer.Option(
+            "--smart-order",
+            help="Reorder ports by predicted open probability before scanning (ML-based, needs scikit-learn)",
+        ),
+    ] = False,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -105,6 +113,18 @@ def scan(
 
     targets = expand_cidr(target)
     protocol = "udp" if udp else "tcp"
+
+    if smart_order:
+        # Quick OS ping before the scan — gives the predictor a useful context signal.
+        # Especially helpful in stealth mode where port order actually matters.
+        os_hint: str | None = None
+        if os_detect:
+            ttl = get_ttl_via_ping(targets[0], timeout=2.0)
+            os_hint = guess_os_from_ttl(ttl) if ttl else None
+        port_list = sort_ports(port_list, targets[0], os_hint)
+        console.print(
+            f"[dim]Smart order active ({get_sklearn_status()}) " f"— first 5: {port_list[:5]}[/dim]"
+        )
 
     console.print(
         f"\n[bold cyan]PortHawk[/bold cyan] — scanning [bold]{target}[/bold] "
