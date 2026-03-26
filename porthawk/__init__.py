@@ -29,8 +29,9 @@ from porthawk.exceptions import (
 from porthawk.honeypot import HoneypotReport, Indicator, score_honeypot
 from porthawk.reporter import ScanReport, build_report
 from porthawk.scanner import PortState, ScanResult
+from porthawk.throttle import AdaptiveConfig, AdaptiveSemaphore, NetworkStats
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __author__ = "Jakob Bartoschek"
 __license__ = "MIT"
 
@@ -50,6 +51,10 @@ __all__ = [
     "score_honeypot",
     "HoneypotReport",
     "Indicator",
+    # Adaptive throttling
+    "AdaptiveConfig",
+    "AdaptiveSemaphore",
+    "NetworkStats",
     # Exceptions
     "PortHawkError",
     "InvalidTargetError",

@@ -267,7 +267,66 @@ high_risk = [r for r in results if r.risk_level == "HIGH"]
 
 ---
 
-## 13. Honeypot Check Before You Do Anything Stupid
+## 13. Adaptive Scan Speed
+
+**Scenario:** You want maximum speed without triggering IDS or overloading the target network.
+
+```bash
+porthawk -t 192.168.1.1 -p 1-1024 --adaptive
+```
+
+What `--adaptive` does:
+- Starts at 25 concurrent connections (instead of 500)
+- After every 30 clean probes, adds 2 more concurrent slots
+- If more than 30% of recent probes time out → halves the concurrency immediately
+- If RTT variance is high (jitter > 80ms) → pauses increases but doesn't decrease
+- Never drops below 5 concurrent, never exceeds `--threads` limit
+
+This is AIMD — the same algorithm TCP uses for congestion control. Additive increase,
+multiplicative decrease. It found the right rate for your connection and adjusted.
+
+Combine with other flags:
+
+```bash
+# Adaptive + banners — good for slow scans where you don't want to kill the network
+porthawk -t 192.168.1.1 --common --banners --adaptive
+
+# Adaptive with a higher ceiling
+porthawk -t 192.168.1.1 -p 1-10000 --adaptive --threads 300
+```
+
+**When to use it:**
+- Scanning through a VPN where the throughput varies
+- Scanning a real target in an engagement where you can't afford IDS triggers
+- Networks where you don't know the capacity upfront
+
+**When NOT to use it:**
+- Local subnet scans (just use `--threads 500`, the network can handle it)
+- Stealth mode (fixed 1 thread — adaptive doesn't help there)
+
+Programmatic use:
+
+```python
+import asyncio
+from porthawk.scanner import scan_host
+from porthawk.throttle import AdaptiveConfig
+
+cfg = AdaptiveConfig(
+    initial_concurrency=20,
+    timeout_threshold=0.25,  # back off faster — careful mode
+)
+
+results = asyncio.run(scan_host(
+    "10.0.0.1",
+    ports=list(range(1, 65536)),
+    max_concurrent=200,
+    adaptive_config=cfg,
+))
+```
+
+---
+
+## 14. Honeypot Check Before You Do Anything Stupid
 
 **Scenario:** You found a host in scope that has telnet open, Redis exposed, and FTP. Something feels off.
 
