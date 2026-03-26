@@ -134,7 +134,8 @@ def test_public_api_exports():
     assert hasattr(porthawk, "ScanTimeoutError")
     assert hasattr(porthawk, "udp_scan_host")
     assert hasattr(porthawk, "get_udp_top_ports")
+    assert hasattr(porthawk, "build_sarif")
 
 
 def test_version_accessible():
-    assert porthawk.__version__ == "0.8.0"
+    assert porthawk.__version__ == "0.9.0"

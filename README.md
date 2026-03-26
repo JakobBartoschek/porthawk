@@ -24,6 +24,8 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 
 - **Async TCP scanning** via `asyncio` — 500 concurrent connections by default, configurable
 - **UDP scanning** — protocol-specific payloads for DNS, NTP, SNMP, SSDP, NetBIOS, mDNS, IKE, TFTP. Validates responses, extracts banners. ICMP unreachable detection for closed ports. Defaults to top 20 UDP ports.
+- **GitHub Action** — drop `uses: jakobbartoschek/porthawk@v0.9.0` into any workflow. Scan a host, get open ports in the Security tab as SARIF alerts, download reports as artifacts.
+- **SARIF output** — `-o sarif` writes a SARIF 2.1.0 file. Open ports become Security tab alerts with risk severity mapped to SARIF levels.
 - **OS fingerprinting** from TTL value — Linux/Unix, Windows, Network Device
 - **Service detection** — protocol-aware banner grabbing with version extraction for SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
 - **CVE lookup** via NVD API — version-aware: "OpenSSH 8.9" returns relevant CVEs, not just everything tagged "ssh". Two-layer cache (in-memory + disk, 24h TTL) to stay within rate limits
@@ -326,6 +328,64 @@ Full API reference: [`docs/api.md`](docs/api.md)
 
 ---
 
+## GitHub Action
+
+Run PortHawk in any GitHub Actions workflow. Open ports appear in the **Security tab** as code scanning alerts.
+
+```yaml
+# .github/workflows/port-scan.yml
+name: Port Scan
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # every Monday at 06:00
+  workflow_dispatch:
+
+permissions:
+  security-events: write   # needed for SARIF upload
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan staging server
+        uses: jakobbartoschek/porthawk@v0.9.0
+        with:
+          target: ${{ secrets.STAGING_HOST }}
+          ports: common
+          fail-on-ports: '21,23,3389'   # fail if FTP, Telnet, or RDP is open
+
+      - name: Scan with UDP
+        uses: jakobbartoschek/porthawk@v0.9.0
+        with:
+          target: ${{ secrets.STAGING_HOST }}
+          scan-mode: udp
+          timeout: '2.0'
+          output-formats: html
+```
+
+The action uploads scan reports as workflow artifacts and pushes a SARIF file to the Security tab automatically. No extra steps needed.
+
+**Inputs:**
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `target` | — | IP, hostname, or CIDR (required) |
+| `ports` | `common` | `common`, `full`, range, or list |
+| `scan-mode` | `tcp` | `tcp`, `udp`, `syn`, `stealth` |
+| `timeout` | `1.0` | Per-port timeout in seconds |
+| `threads` | `100` | Max concurrent connections |
+| `output-formats` | — | `html`, `csv`, or `html,csv` |
+| `upload-sarif` | `true` | Push to GitHub Security tab |
+| `upload-artifacts` | `true` | Upload reports as artifacts |
+| `fail-on-ports` | — | Ports that fail the workflow if open |
+
+**Outputs:** `open-ports`, `open-count`, `report-path`, `sarif-path`
+
+---
+
 ## Example Output (JSON)
 
 ```json
@@ -336,7 +396,7 @@ Full API reference: [`docs/api.md`](docs/api.md)
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -413,6 +473,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] IDS/IPS evasion — Slow & Low mode: IP fragmentation, jitter, decoys, custom TCP flags
 - [x] Passive OS fingerprinting — TCP stack analysis from SYN-ACK, rule-based + KNN classifier
 - [x] UDP scanning — protocol-specific payloads, ICMP unreachable detection, 8 protocols
+- [x] GitHub Action — `uses: jakobbartoschek/porthawk@v0.9.0`, SARIF to Security tab, artifact upload
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports

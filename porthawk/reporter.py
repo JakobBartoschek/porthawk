@@ -1,10 +1,11 @@
-"""Output formatting — terminal, JSON, CSV, HTML.
+"""Output formatting — terminal, JSON, CSV, HTML, SARIF.
 
 All display logic is here. scanner.py and fingerprint.py produce data,
 reporter.py renders it. That boundary is intentional and should stay that way.
 """
 
 import csv
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -407,6 +408,29 @@ def save_csv(report: ScanReport, output_path: Path | None = None) -> Path:
                 }
             )
 
+    return dest
+
+
+def save_sarif(report: ScanReport, output_path: Path | None = None) -> Path:
+    """Write a SARIF 2.1.0 file suitable for upload to GitHub Security tab.
+
+    Args:
+        report: ScanReport from build_report().
+        output_path: Override default path (useful for testing).
+
+    Returns:
+        Path where the file was written.
+    """
+    from porthawk import __version__
+    from porthawk.sarif import build_sarif
+
+    if output_path is None:
+        dest = _ensure_reports_dir() / f"scan_{_timestamp()}.sarif"
+    else:
+        dest = output_path
+
+    sarif_doc = build_sarif(report, version=__version__)
+    dest.write_text(json.dumps(sarif_doc, indent=2), encoding="utf-8")
     return dest
 
 
