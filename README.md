@@ -26,12 +26,14 @@ or a self-contained HTML report. It runs on anything with Python 3.10+, no root 
 - **UDP scanning** via raw sockets (requires admin/root)
 - **OS fingerprinting** from TTL value — Linux/Unix, Windows, Network Device
 - **Banner grabbing** — SSH version, HTTP headers, FTP/SMTP banners
+- **CVE lookup** via NVD API — see `CVE-2022-0543 (10.0)` next to that open Redis port
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Multi-format output** — Rich terminal table, JSON, CSV, self-contained HTML
 - **CIDR support** — scan `192.168.1.0/24` and it expands automatically
 - **Stealth mode** — single-threaded, 3s timeout, less noise on the wire
 - **Top N ports** — skip the 65535 full scan and focus on what matters
+- **Python API** — `await porthawk.scan(...)` for programmatic use
 
 ---
 
@@ -40,9 +42,12 @@ or a self-contained HTML report. It runs on anything with Python 3.10+, no root 
 ```mermaid
 flowchart TD
     CLI["cli.py\n(typer)"]
+    API["api.py\n(public Python API)"]
     SCAN["scanner.py\n(asyncio TCP/UDP)"]
     FP["fingerprint.py\n(banner, TTL, HTTP)"]
     SDB["service_db.py\n(port→service, risk)"]
+    CVE["cve.py\n(NVD API lookup)"]
+    EXC["exceptions.py\n(error hierarchy)"]
     REP["reporter.py\n(formatting)"]
     OUT_JSON["JSON file"]
     OUT_CSV["CSV file"]
@@ -50,10 +55,15 @@ flowchart TD
     OUT_TERM["Terminal\n(rich table)"]
 
     CLI --> SCAN
+    CLI --> CVE
+    API --> SCAN
+    API --> CVE
+    API --> EXC
     SCAN --> FP
     SCAN --> SDB
     FP --> REP
     SDB --> REP
+    CVE --> REP
     REP --> OUT_JSON
     REP --> OUT_CSV
     REP --> OUT_HTML
@@ -110,6 +120,16 @@ porthawk -t 10.0.0.1 --common --stealth
 sudo porthawk -t 192.168.1.1 -p 53,161,123 --udp
 ```
 
+**CVE lookup — see what's actually exploitable:**
+```bash
+porthawk -t 192.168.1.1 --common --cve
+```
+
+**Set NVD_API_KEY to remove rate limiting (free at nvd.nist.gov):**
+```bash
+NVD_API_KEY=your-key porthawk -t 192.168.1.1 --common --cve --banners
+```
+
 **Example terminal output:**
 ```
 PortHawk — scanning 192.168.1.1 (1 host, 100 ports, TCP)
@@ -138,10 +158,11 @@ PortHawk works as a library too. No CLI required.
 import asyncio
 import porthawk
 
-# Simple scan — returns a list of open ports
-results = asyncio.run(porthawk.scan("192.168.1.1", ports="common"))
+# Scan + CVE lookup in one call
+results = asyncio.run(porthawk.scan("192.168.1.1", ports="common", cve_lookup=True))
 for r in results:
-    print(f"{r.port}/{r.protocol}  {r.service_name}  {r.risk_level}")
+    top_cve = r.cves[0]["cve_id"] if r.cves else "—"
+    print(f"{r.port}/{r.protocol}  {r.service_name}  {r.risk_level}  {top_cve}")
 ```
 
 ```python

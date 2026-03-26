@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 
 from porthawk import __version__
+from porthawk.cve import lookup_cves
 from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_from_ttl
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
@@ -58,6 +59,9 @@ def scan(
     os_detect: Annotated[bool, typer.Option("--os", help="Attempt OS detection via TTL")] = False,
     banners: Annotated[
         bool, typer.Option("--banners", help="Grab service banners from open ports")
+    ] = False,
+    cve: Annotated[
+        bool, typer.Option("--cve", help="Look up CVEs for each open service via NVD API")
     ] = False,
     timeout: Annotated[
         float, typer.Option("--timeout", help="Connection timeout in seconds")
@@ -119,6 +123,10 @@ def scan(
         flat_results, host=targets[0], banners=banners, os_detect=os_detect, timeout=timeout
     )
 
+    if cve:
+        console.print("\n[dim]Looking up CVEs via NVD API...[/dim]")
+        asyncio.run(_attach_cves(flat_results))
+
     report = build_report(
         target=target,
         results=flat_results,
@@ -127,7 +135,7 @@ def scan(
         max_concurrent=threads,
     )
 
-    print_terminal(report, show_closed=show_closed)
+    print_terminal(report, show_closed=show_closed, show_cves=cve)
     _save_outputs(report, output)
 
 
@@ -223,6 +231,22 @@ def _enrich_results(
             asyncio.run(_grab_all())
 
     return enriched
+
+
+async def _attach_cves(results: list) -> None:
+    """Fetch CVEs for each unique open-port service and attach them to results.
+
+    Deduplicates by service name — 10 open Redis ports = 1 NVD API call.
+    """
+    open_results = [r for r in results if r.state == PortState.OPEN and r.service_name]
+    seen: dict[str, list[dict]] = {}
+
+    for r in open_results:
+        svc = r.service_name
+        if svc not in seen:
+            cves = await lookup_cves(svc)
+            seen[svc] = [c.model_dump() for c in cves]
+        r.cves = seen[svc]
 
 
 def _save_outputs(report, output: str | None) -> None:

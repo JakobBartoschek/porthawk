@@ -155,6 +155,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         <th onclick="sortTable(2)">Service ↕</th>
         <th onclick="sortTable(3)">Risk ↕</th>
         <th>Banner / Info</th>
+        <th>CVEs</th>
       </tr>
     </thead>
     <tbody>
@@ -165,6 +166,17 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
         <td>{{ r.service_name or "unknown" }}</td>
         <td class="risk-{{ r.risk_level or 'INFO' }}">{{ r.risk_level or "—" }}</td>
         <td class="banner">{{ r.banner or "—" }}</td>
+        <td>
+          {% if r.cves %}
+            {% for cve in r.cves %}
+              <a href="{{ cve.url }}" target="_blank" style="color: var(--{% if cve.severity == 'CRITICAL' or cve.severity == 'HIGH' %}high{% elif cve.severity == 'MEDIUM' %}medium{% else %}low{% endif %}); display: block; font-size: 0.8rem;">
+                {{ cve.cve_id }}{% if cve.cvss_score %} ({{ cve.cvss_score }}){% endif %}
+              </a>
+            {% endfor %}
+          {% else %}
+            <span style="color: var(--text-muted)">—</span>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -262,7 +274,7 @@ def build_report(
     return ScanReport(metadata=metadata, results=results)
 
 
-def print_terminal(report: ScanReport, show_closed: bool = False) -> None:
+def print_terminal(report: ScanReport, show_closed: bool = False, show_cves: bool = False) -> None:
     """Rich-formatted terminal table. Only shows open ports by default.
 
     Color coding: red = HIGH risk, yellow = MEDIUM, green = LOW, cyan = INFO.
@@ -270,6 +282,7 @@ def print_terminal(report: ScanReport, show_closed: bool = False) -> None:
     Args:
         report: ScanReport from build_report().
         show_closed: Whether to include closed and filtered ports in output.
+        show_cves: Whether to add a CVE column (only useful if CVE lookup was run).
     """
     console = Console()
     table = Table(
@@ -283,6 +296,8 @@ def print_terminal(report: ScanReport, show_closed: bool = False) -> None:
     table.add_column("Service", width=18)
     table.add_column("Risk", width=8)
     table.add_column("Banner / Info", no_wrap=False)
+    if show_cves:
+        table.add_column("Top CVE", no_wrap=False)
 
     display_results = report.results if show_closed else report.open_only()
     display_results = sorted(display_results, key=lambda r: r.port)
@@ -293,13 +308,30 @@ def print_terminal(report: ScanReport, show_closed: bool = False) -> None:
             _RISK_COLORS.get(RiskLevel(result.risk_level), "cyan") if result.risk_level else "cyan"
         )
 
-        table.add_row(
+        row = [
             f"{result.port}/{result.protocol}",
             f"[{state_color}]{result.state}[/{state_color}]",
             result.service_name or "unknown",
             f"[{risk_color}]{result.risk_level or '—'}[/{risk_color}]",
             result.banner or "",
-        )
+        ]
+
+        if show_cves:
+            top_cve = result.cves[0] if result.cves else None
+            if top_cve:
+                score = top_cve.get("cvss_score") or "?"
+                cve_id = top_cve.get("cve_id", "")
+                severity = top_cve.get("severity") or ""
+                sev_color = (
+                    _RISK_COLORS.get(RiskLevel(severity), "cyan")
+                    if severity in ("HIGH", "MEDIUM", "LOW")
+                    else ("red" if severity == "CRITICAL" else "cyan")
+                )
+                row.append(f"[{sev_color}]{cve_id} ({score})[/{sev_color}]")
+            else:
+                row.append("[dim]—[/dim]")
+
+        table.add_row(*row)
 
     console.print(table)
     console.print(

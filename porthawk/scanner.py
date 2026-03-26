@@ -33,6 +33,7 @@ class ScanResult(BaseModel):
     os_guess: str | None = None
     ttl: int | None = None
     latency_ms: float | None = None
+    cves: list[dict] = []
 
     @field_validator("port")
     @classmethod

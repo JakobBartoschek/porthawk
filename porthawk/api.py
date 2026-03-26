@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from types import TracebackType
 
+from porthawk.cve import CVEInfo, lookup_cves
 from porthawk.exceptions import InvalidPortSpecError, InvalidTargetError
 from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_from_ttl
 from porthawk.scanner import (
@@ -73,6 +74,18 @@ async def _enrich(
     return results
 
 
+async def _attach_cves(results: list[ScanResult]) -> None:
+    """Fetch CVEs for each unique open-port service. Deduplicates to minimise API calls."""
+    seen: dict[str, list[CVEInfo]] = {}
+    for r in results:
+        if r.state != PortState.OPEN or not r.service_name:
+            continue
+        svc = r.service_name
+        if svc not in seen:
+            seen[svc] = await lookup_cves(svc)
+        r.cves = [c.model_dump() for c in seen[svc]]
+
+
 async def scan(
     target: str,
     *,
@@ -82,6 +95,7 @@ async def scan(
     udp: bool = False,
     banners: bool = False,
     os_detect: bool = False,
+    cve_lookup: bool = False,
     include_closed: bool = False,
 ) -> list[ScanResult]:
     """Scan a host or CIDR range and return results as a flat list.
@@ -95,6 +109,7 @@ async def scan(
         udp: Scan UDP instead of TCP. Requires root/admin on most systems.
         banners: Grab service banners from open ports after scan.
         os_detect: Attempt TTL-based OS fingerprinting.
+        cve_lookup: Query NVD API for CVEs related to each open service.
         include_closed: Include closed/filtered ports in the returned list.
 
     Returns:
@@ -121,6 +136,9 @@ async def scan(
     flat = await _enrich(
         flat, host=targets[0], banners=banners, os_detect=os_detect, timeout=timeout
     )
+
+    if cve_lookup:
+        await _attach_cves(flat)
 
     if not include_closed:
         flat = [r for r in flat if r.state == PortState.OPEN]
@@ -170,6 +188,7 @@ class Scanner:
         *,
         banners: bool = False,
         os_detect: bool = False,
+        cve_lookup: bool = False,
         include_closed: bool = False,
     ) -> list[ScanResult]:
         """Run a scan with the options bound at construction time.
@@ -191,5 +210,6 @@ class Scanner:
             udp=self.udp,
             banners=banners,
             os_detect=os_detect,
+            cve_lookup=cve_lookup,
             include_closed=include_closed,
         )

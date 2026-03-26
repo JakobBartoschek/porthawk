@@ -7,6 +7,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+### Added
+- CVE lookup via NVD API v2.0 — `--cve` flag attaches top CVEs (sorted by CVSS score) to each open service
+- In-memory CVE cache per service name — one API call per unique service, not per open port
+- `NVD_API_KEY` env var support — set it to remove inter-request delays (50 req/30s vs 5)
+- `porthawk.CVEInfo` model in the public API
+- `porthawk.scan(..., cve_lookup=True)` and `Scanner.scan(..., cve_lookup=True)` for programmatic CVE lookups
+- CVE column in HTML report — clickable NVD links, color-coded by severity
+- CVE column in terminal output when `--cve` is passed — shows top CVE ID + CVSS score
+- Public Python API (`porthawk.scan()`, `porthawk.Scanner`) — use PortHawk as a library
+- Custom exception hierarchy: `PortHawkError`, `InvalidTargetError`, `InvalidPortSpecError`, `ScanPermissionError`, `ScanTimeoutError`
+
 ---
 
 ## [0.1.0] — 2026-03-25
