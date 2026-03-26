@@ -43,19 +43,19 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 
 ```mermaid
 flowchart TD
-    CLI["cli.py\n(typer)"]
-    API["api.py\n(public Python API)"]
-    SCAN["scanner.py\n(asyncio TCP/UDP)"]
-    FP["fingerprint.py\n(banner, TTL, HTTP)"]
-    PRED["predictor.py\n(ML port ordering)"]
-    SDB["service_db.py\n(port-to-service, risk)"]
-    CVE["cve.py\n(NVD API + disk cache)"]
-    EXC["exceptions.py\n(error hierarchy)"]
-    REP["reporter.py\n(formatting)"]
-    OUT_JSON["JSON file"]
-    OUT_CSV["CSV file"]
-    OUT_HTML["HTML file"]
-    OUT_TERM["Terminal\n(rich table)"]
+    CLI["cli.py"]
+    API["api.py"]
+    SCAN["scanner.py"]
+    FP["fingerprint.py"]
+    PRED["predictor.py"]
+    SDB["service_db.py"]
+    CVE["cve.py"]
+    EXC["exceptions.py"]
+    REP["reporter.py"]
+    OUT_JSON["JSON"]
+    OUT_CSV["CSV"]
+    OUT_HTML["HTML"]
+    OUT_TERM["Terminal"]
 
     CLI --> PRED
     CLI --> SCAN
