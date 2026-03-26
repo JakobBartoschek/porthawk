@@ -13,6 +13,7 @@ from rich.console import Console
 from porthawk import __version__
 from porthawk.cve import lookup_cves
 from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_from_ttl
+from porthawk.honeypot import score_honeypot
 from porthawk.predictor import get_sklearn_status, sort_ports
 from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
@@ -88,6 +89,13 @@ def scan(
             help="Reorder ports by predicted open probability before scanning (ML-based, needs scikit-learn)",
         ),
     ] = False,
+    honeypot: Annotated[
+        bool,
+        typer.Option(
+            "--honeypot",
+            help="Score the target for honeypot likelihood after scanning",
+        ),
+    ] = False,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -159,6 +167,9 @@ def scan(
     if cve:
         console.print("\n[dim]Looking up CVEs via NVD API...[/dim]")
         asyncio.run(_attach_cves(flat_results))
+
+    if honeypot:
+        _print_honeypot_report(flat_results)
 
     report = build_report(
         target=target,
@@ -307,6 +318,33 @@ def _save_outputs(report, output: str | None) -> None:
             console.print(f"  [green]HTML:[/green] {path}")
         else:
             console.print(f"  [yellow]Unknown format '{fmt}' — skipped[/yellow]")
+
+
+def _print_honeypot_report(results: list) -> None:
+    """Run the honeypot scorer and print the result to the terminal."""
+
+    hp = score_honeypot(results)
+
+    verdict_color = {
+        "LIKELY_REAL": "green",
+        "SUSPICIOUS": "yellow",
+        "LIKELY_HONEYPOT": "red",
+    }.get(hp.verdict, "white")
+
+    console.print(
+        f"\n[bold]Honeypot check:[/bold] score=[bold {verdict_color}]{hp.score:.2f}[/bold {verdict_color}]"
+        f"  verdict=[bold {verdict_color}]{hp.verdict}[/bold {verdict_color}]"
+        f"  confidence={hp.confidence}"
+        f"  ({hp.open_port_count} open ports analyzed)"
+    )
+
+    if hp.indicators:
+        for ind in hp.indicators:
+            console.print(
+                f"  [{verdict_color}]⚑[/{verdict_color}] [{ind.weight:.2f}] {ind.name}: {ind.description}"
+            )
+    else:
+        console.print("  [dim]No honeypot indicators detected[/dim]")
 
 
 def main() -> None:

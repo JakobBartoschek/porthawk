@@ -26,10 +26,11 @@ from porthawk.exceptions import (
     ScanPermissionError,
     ScanTimeoutError,
 )
+from porthawk.honeypot import HoneypotReport, Indicator, score_honeypot
 from porthawk.reporter import ScanReport, build_report
 from porthawk.scanner import PortState, ScanResult
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 __author__ = "Jakob Bartoschek"
 __license__ = "MIT"
 
@@ -45,6 +46,10 @@ __all__ = [
     "build_report",
     # CVE lookup
     "CVEInfo",
+    # Honeypot detection
+    "score_honeypot",
+    "HoneypotReport",
+    "Indicator",
     # Exceptions
     "PortHawkError",
     "InvalidTargetError",
