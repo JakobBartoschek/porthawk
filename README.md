@@ -14,9 +14,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Authorized Use Only](https://img.shields.io/badge/use-authorized%20targets%20only-red)](DISCLAIMER.md)
 
-PortHawk is an async TCP/UDP port scanner written in pure Python. It does banner grabbing,
-OS fingerprinting from TTL, risk scoring, and outputs results as terminal tables, JSON, CSV,
-or a self-contained HTML report. It runs on anything with Python 3.10+, no root required for TCP.
+PortHawk is an async TCP/UDP port scanner written in pure Python. It scans ports, extracts
+service versions from banners, looks up CVEs for what it finds, and outputs results as a
+live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no external binaries.
 
 ---
 
@@ -26,8 +26,8 @@ or a self-contained HTML report. It runs on anything with Python 3.10+, no root 
 - **UDP scanning** via raw sockets (requires admin/root)
 - **OS fingerprinting** from TTL value — Linux/Unix, Windows, Network Device
 - **Service detection** — protocol-aware banner grabbing with version extraction for SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
-- **ML port prioritization** — logistic regression trained on internet-wide scan frequencies, adjusts for private IP ranges and OS hint (`pip install porthawk[ml]`)
 - **CVE lookup** via NVD API — version-aware: "OpenSSH 8.9" returns relevant CVEs, not just everything tagged "ssh". Two-layer cache (in-memory + disk, 24h TTL) to stay within rate limits
+- **ML port prioritization** — logistic regression trained on internet-wide scan frequencies, adjusts for private IP ranges and OS hint (`pip install porthawk[ml]`)
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -47,8 +47,9 @@ flowchart TD
     API["api.py\n(public Python API)"]
     SCAN["scanner.py\n(asyncio TCP/UDP)"]
     FP["fingerprint.py\n(banner, TTL, HTTP)"]
+    PRED["predictor.py\n(ML port ordering)"]
     SDB["service_db.py\n(port-to-service, risk)"]
-    CVE["cve.py\n(NVD API lookup)"]
+    CVE["cve.py\n(NVD API + disk cache)"]
     EXC["exceptions.py\n(error hierarchy)"]
     REP["reporter.py\n(formatting)"]
     OUT_JSON["JSON file"]
@@ -56,6 +57,7 @@ flowchart TD
     OUT_HTML["HTML file"]
     OUT_TERM["Terminal\n(rich table)"]
 
+    CLI --> PRED
     CLI --> SCAN
     CLI --> CVE
     API --> SCAN
@@ -103,9 +105,19 @@ pip install .
 porthawk -t 192.168.1.1 --common
 ```
 
-**Banner grabbing with OS detection, save to JSON and HTML:**
+**Service version detection + OS fingerprint:**
 ```bash
-porthawk -t 192.168.1.1 -p 1-1024 --banners --os -o json,html
+porthawk -t 192.168.1.1 --common --banners --os
+```
+
+**CVE lookup — what's actually exploitable on the open ports:**
+```bash
+porthawk -t 192.168.1.1 --common --banners --cve
+```
+
+**Save to JSON and HTML:**
+```bash
+porthawk -t 192.168.1.1 -p 1-1024 --banners --cve -o json,html
 ```
 
 **Scan a /24 network, top 50 ports:**
@@ -113,14 +125,14 @@ porthawk -t 192.168.1.1 -p 1-1024 --banners --os -o json,html
 porthawk -t 192.168.1.0/24 --top-ports 50
 ```
 
-**Full port scan with custom timeout and thread limit:**
+**Full port scan with custom timeout:**
 ```bash
 porthawk -t scanme.nmap.org --full --timeout 2.0 --threads 200
 ```
 
-**Stealth mode — slow, single-threaded, 3s timeout:**
+**Stealth mode with ML port ordering — likely-open ports first:**
 ```bash
-porthawk -t 10.0.0.1 --common --stealth
+porthawk -t 10.0.0.1 --common --stealth --smart-order
 ```
 
 **UDP scan (requires admin/root):**
@@ -133,36 +145,24 @@ sudo porthawk -t 192.168.1.1 -p 53,161,123 --udp
 porthawk -t 192.168.1.1 --common --no-live
 ```
 
-**CVE lookup — see what's actually exploitable:**
-```bash
-porthawk -t 192.168.1.1 --common --cve
-```
-
-**ML port prioritization — scan likely-open ports first (useful in stealth mode):**
-```bash
-porthawk -t 192.168.1.1 --common --smart-order --stealth
-```
-
 **Set NVD_API_KEY to remove rate limiting (free at nvd.nist.gov):**
 ```bash
 NVD_API_KEY=your-key porthawk -t 192.168.1.1 --common --cve --banners
 ```
 
-**Example terminal output:**
+**Example terminal output (with `--banners --cve`):**
 ```
 PortHawk — scanning 192.168.1.1 (1 host, 100 ports, TCP)
 
-  192.168.1.1 100%|████████████████████| 100/100 [00:02<00:00]
-
-  ┏━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
-  ┃ Port      ┃ State    ┃ Service            ┃ Risk     ┃ Banner / Info      ┃
-  ┡━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
-  │ 22/tcp    │ open     │ ssh                │ MEDIUM   │ SSH OpenSSH_8.9p1  │
-  │ 80/tcp    │ open     │ http               │ LOW      │ server: nginx/1.24 │
-  │ 443/tcp   │ open     │ https              │ LOW      │ HTTP 200           │
-  │ 3306/tcp  │ open     │ mysql              │ MEDIUM   │ MySQL 8.0.33       │
-  │ 6379/tcp  │ open     │ redis              │ HIGH     │ Redis 7.0.11       │
-  └───────────┴──────────┴────────────────────┴──────────┴────────────────────┘
+  ┏━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+  ┃ Port      ┃ State    ┃ Service    ┃ Risk     ┃ Banner             ┃ Top CVE                  ┃
+  ┡━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+  │ 22/tcp    │ open     │ ssh        │ MEDIUM   │ SSH OpenSSH_8.9p1  │ CVE-2023-38408 (9.8)     │
+  │ 80/tcp    │ open     │ http       │ LOW      │ server: nginx/1.24 │ CVE-2023-44487 (7.5)     │
+  │ 443/tcp   │ open     │ https      │ LOW      │ HTTP 200           │ —                        │
+  │ 3306/tcp  │ open     │ mysql      │ MEDIUM   │ MySQL 8.0.33       │ CVE-2023-22005 (4.9)     │
+  │ 6379/tcp  │ open     │ redis      │ HIGH     │ Redis 7.0.11       │ CVE-2022-0543 (10.0)     │
+  └───────────┴──────────┴────────────┴──────────┴────────────────────┴──────────────────────────┘
   Open: 5 / 100 scanned
 ```
 
@@ -170,29 +170,36 @@ PortHawk — scanning 192.168.1.1 (1 host, 100 ports, TCP)
 
 ## Python API
 
-PortHawk works as a library too. No CLI required.
+PortHawk works as a library. No CLI required.
 
 ```python
 import asyncio
 import porthawk
 
-# Scan + CVE lookup in one call
-results = asyncio.run(porthawk.scan("192.168.1.1", ports="common", cve_lookup=True))
+# Full scan with banners and CVE lookup
+results = asyncio.run(porthawk.scan(
+    "192.168.1.1",
+    ports="common",
+    banners=True,
+    cve_lookup=True,
+))
+
 for r in results:
+    version = r.service_version or "unknown version"
     top_cve = r.cves[0]["cve_id"] if r.cves else "—"
-    print(f"{r.port}/{r.protocol}  {r.service_name}  {r.risk_level}  {top_cve}")
+    print(f"{r.port}/{r.protocol}  {r.service_name}  {version}  {top_cve}")
 ```
 
 ```python
-# Context manager — useful when scanning the same target multiple times
+# Context manager — same target, multiple scans
 async with porthawk.Scanner("192.168.1.1", timeout=2.0) as scanner:
     web   = await scanner.scan(ports="80,443,8080,8443", banners=True)
-    infra = await scanner.scan(ports="22,3306,5432,6379")
+    infra = await scanner.scan(ports="22,3306,5432,6379", cve_lookup=True)
 ```
 
 ```python
-# Build a report and export it
-report   = porthawk.build_report("192.168.1.1", results)
+# Build a report and export
+report    = porthawk.build_report("192.168.1.1", results)
 html_path = porthawk.reporter.save_html(report)
 ```
 
@@ -206,11 +213,11 @@ Full API reference: [`docs/api.md`](docs/api.md)
 {
   "metadata": {
     "target": "192.168.1.1",
-    "scan_time": "2026-03-25T14:30:00",
+    "scan_time": "2026-03-26T14:30:00",
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -222,11 +229,21 @@ Full API reference: [`docs/api.md`](docs/api.md)
       "state": "open",
       "banner": "SSH OpenSSH_8.9p1",
       "service_name": "ssh",
+      "service_version": "OpenSSH_8.9p1",
       "risk_level": "MEDIUM",
       "os_guess": "Linux/Unix",
       "ttl": 64,
       "latency_ms": 0.8,
-      "service_version": "OpenSSH_8.9p1"
+      "cves": [
+        {
+          "cve_id": "CVE-2023-38408",
+          "cvss_score": 9.8,
+          "severity": "CRITICAL",
+          "description": "Remote code execution in ssh-agent...",
+          "published": "2023-07-19",
+          "url": "https://nvd.nist.gov/vuln/detail/CVE-2023-38408"
+        }
+      ]
     }
   ]
 }
@@ -268,8 +285,11 @@ All network calls are mocked — tests run without any real connections.
 ## Roadmap
 
 - [x] CVE lookup via NVD API per detected service/version
+- [x] Version-aware service detection (SSH, FTP, MySQL, Redis, ...)
+- [x] ML port prioritization via logistic regression
+- [x] Persistent CVE disk cache with TTL
 - [ ] Nmap XML import and diff/compare mode
-- [ ] Web dashboard with Flask (already installed as optional dep)
+- [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
 - [ ] IPv6 support
 
