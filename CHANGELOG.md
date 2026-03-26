@@ -5,6 +5,58 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [0.9.0] — 2026-03-27
+
+### GitHub Action + SARIF output
+
+PortHawk can now run as a GitHub Action. Drop it into any workflow, point it at a host, and open ports show up in the GitHub Security tab as code scanning alerts.
+
+**New: `action.yml` — composite GitHub Action**
+
+Other repos use it as:
+```yaml
+- uses: jakobbartoschek/porthawk@v0.9.0
+  with:
+    target: ${{ secrets.STAGING_HOST }}
+    ports: common
+    fail-on-ports: '21,23,3389'
+```
+
+Inputs:
+- `target` — IP, hostname, or CIDR (required)
+- `ports` — `common`, `full`, range like `1-1024`, or list like `22,80,443`
+- `scan-mode` — `tcp` (default), `udp`, `syn`, `stealth`
+- `timeout` — per-port timeout in seconds
+- `threads` — max concurrency
+- `output-formats` — `html`, `csv`, or `html,csv` (JSON + SARIF always included)
+- `upload-sarif` — upload to GitHub Security tab (default: true, needs `security-events: write`)
+- `upload-artifacts` — upload reports as workflow artifacts (default: true)
+- `fail-on-ports` — comma-separated ports that fail the workflow if open
+
+Outputs: `open-ports`, `open-count`, `report-path`, `sarif-path`
+
+**New module: `porthawk/sarif.py`**
+
+- `build_sarif(report, version)` — builds a SARIF 2.1.0 document from a `ScanReport`
+- Maps risk levels to SARIF severity: HIGH → error (8.5), MEDIUM → warning (5.5), LOW → note (2.0), unclassified → note (1.0)
+- Attaches CVE IDs as `relatedLocations` when CVE lookup was run
+- Logical locations point to `host:port/protocol` — clean Security tab entries without fake file refs
+
+**Updated: `porthawk/reporter.py`**
+
+- `save_sarif(report, output_path)` — writes SARIF to disk, same pattern as `save_json`/`save_html`
+
+**Updated: CLI**
+
+- `-o sarif` now works alongside `json`, `csv`, `html`
+- Action uses `-o json,sarif` by default
+
+**Public API:** `porthawk.build_sarif` added to `__all__`
+
+**34 new tests in `tests/test_sarif.py`** — structure validation, risk→rule mapping, CVE relatedLocations, JSON serialisability, `save_sarif` file output
+
+---
+
 ## [0.8.0] — 2026-03-26
 
 ### UDP Scanner

@@ -30,12 +30,13 @@ from porthawk.exceptions import (
 from porthawk.honeypot import HoneypotReport, Indicator, score_honeypot
 from porthawk.passive_os import OsFingerprint, OsMatch, fingerprint_os, passive_os_scan, ttl_only_os
 from porthawk.reporter import ScanReport, build_report
+from porthawk.sarif import build_sarif
 from porthawk.scanner import PortState, ScanResult
 from porthawk.syn_scan import get_syn_backend, syn_scan_host
 from porthawk.throttle import AdaptiveConfig, AdaptiveSemaphore, NetworkStats
 from porthawk.udp_scan import get_udp_top_ports, udp_scan_host
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __author__ = "Jakob Bartoschek"
 __license__ = "MIT"
 
@@ -71,6 +72,8 @@ __all__ = [
     # UDP scanning
     "udp_scan_host",
     "get_udp_top_ports",
+    # SARIF output
+    "build_sarif",
     # Adaptive throttling
     "AdaptiveConfig",
     "AdaptiveSemaphore",

@@ -740,6 +740,65 @@ These are the ports a TCP scanner would completely miss. Good default for any UD
 
 ---
 
+## SARIF Output
+
+SARIF (Static Analysis Results Interchange Format) is what GitHub's Security tab consumes. PortHawk maps open ports to SARIF findings by risk level so they show up as code scanning alerts.
+
+```python
+import json
+import porthawk
+
+# build a SARIF document from a ScanReport
+report = porthawk.build_report(
+    target="192.168.1.1",
+    results=my_results,
+    protocol="tcp",
+    timeout=1.0,
+    max_concurrent=100,
+)
+
+sarif_doc = porthawk.build_sarif(report, version=porthawk.__version__)
+with open("results.sarif", "w") as f:
+    json.dump(sarif_doc, f, indent=2)
+```
+
+Or via CLI — SARIF alongside JSON and HTML in one shot:
+
+```bash
+porthawk -t 192.168.1.1 --common -o json,html,sarif
+```
+
+### `porthawk.build_sarif()`
+
+```python
+def build_sarif(report: ScanReport, version: str = "0.0.0") -> dict:
+```
+
+Returns a SARIF 2.1.0 dict. Pass it through `json.dumps()` to write to disk.
+
+**Risk level → SARIF mapping:**
+
+| Risk | Rule ID | SARIF level | security-severity |
+|------|---------|-------------|-------------------|
+| HIGH | PH001 | error | 8.5 |
+| MEDIUM | PH002 | warning | 5.5 |
+| LOW | PH003 | note | 2.0 |
+| None | PH004 | note | 1.0 |
+
+Only `OPEN` ports become findings. Closed and filtered ports are excluded — they're not security alerts.
+
+CVEs from `--cve` are attached as `relatedLocations` entries. Each CVE ID appears as a named logical location of kind `"vulnerability"`.
+
+### `porthawk.reporter.save_sarif()`
+
+```python
+def save_sarif(report: ScanReport, output_path: Path | None = None) -> Path:
+```
+
+Writes a SARIF file to `reports/scan_YYYYMMDD_HHMMSS.sarif` (or `output_path` if given). Returns the path.
+
+---
+
 ## PyPI Publishing
 
 ```bash

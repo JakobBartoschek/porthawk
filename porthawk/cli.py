@@ -17,7 +17,14 @@ from porthawk.fingerprint import fingerprint_port, get_ttl_via_ping, guess_os_fr
 from porthawk.honeypot import score_honeypot
 from porthawk.passive_os import passive_os_scan, ttl_only_os
 from porthawk.predictor import get_sklearn_status, sort_ports
-from porthawk.reporter import build_report, print_terminal, save_csv, save_html, save_json
+from porthawk.reporter import (
+    build_report,
+    print_terminal,
+    save_csv,
+    save_html,
+    save_json,
+    save_sarif,
+)
 from porthawk.scanner import PortState, expand_cidr, parse_port_range
 from porthawk.service_db import get_service, get_top_ports
 from porthawk.syn_scan import get_syn_backend, syn_scan_host
@@ -84,7 +91,9 @@ def scan(
     threads: Annotated[int, typer.Option("--threads", help="Max concurrent connections")] = 500,
     output: Annotated[
         str | None,
-        typer.Option("--output", "-o", help="Output formats: json,csv,html (comma-separated)"),
+        typer.Option(
+            "--output", "-o", help="Output formats: json,csv,html,sarif (comma-separated)"
+        ),
     ] = None,
     show_closed: Annotated[
         bool,
@@ -533,13 +542,16 @@ def _save_outputs(report, output: str | None) -> None:
     for fmt in formats:
         if fmt == "json":
             path = save_json(report)
-            console.print(f"  [green]JSON:[/green] {path}")
+            console.print(f"  [green]JSON:[/green]  {path}")
         elif fmt == "csv":
             path = save_csv(report)
-            console.print(f"  [green]CSV:[/green]  {path}")
+            console.print(f"  [green]CSV:[/green]   {path}")
         elif fmt == "html":
             path = save_html(report)
-            console.print(f"  [green]HTML:[/green] {path}")
+            console.print(f"  [green]HTML:[/green]  {path}")
+        elif fmt == "sarif":
+            path = save_sarif(report)
+            console.print(f"  [green]SARIF:[/green] {path}")
         else:
             console.print(f"  [yellow]Unknown format '{fmt}' — skipped[/yellow]")
 

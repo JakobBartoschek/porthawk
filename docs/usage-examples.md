@@ -602,6 +602,132 @@ Port states returned by `udp_scan_host`:
 
 ---
 
+## 19. GitHub Action in CI/CD
+
+**Scenario:** Automatically scan a deployment target after every release and fail the workflow if dangerous ports are open.
+
+```yaml
+# .github/workflows/port-scan.yml
+name: Port Scan
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: '0 6 * * 1'   # weekly check
+  workflow_dispatch:
+
+permissions:
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan production host
+        id: scan
+        uses: jakobbartoschek/porthawk@v0.9.0
+        with:
+          target: ${{ secrets.PROD_HOST }}
+          ports: common
+          scan-mode: tcp
+          fail-on-ports: '21,23,3389'
+          output-formats: html
+
+      - name: Print open ports
+        run: echo "Open: ${{ steps.scan.outputs.open-ports }}"
+```
+
+What happens:
+1. PortHawk installs from its own checkout (version matches the `@v0.9.0` tag)
+2. Scans the target with top 100 TCP ports
+3. Writes `reports/scan_*.json` and `reports/scan_*.sarif`
+4. Uploads the SARIF to Security → Code scanning alerts (requires `security-events: write`)
+5. Uploads the whole `reports/` dir as a downloadable workflow artifact
+6. If ports 21, 23, or 3389 are open → workflow fails
+
+**Using outputs from the action:**
+
+```yaml
+- name: Scan staging
+  id: scan
+  uses: jakobbartoschek/porthawk@v0.9.0
+  with:
+    target: 192.168.1.50
+
+- name: Alert if too many ports open
+  if: ${{ fromJson(steps.scan.outputs.open-count) > 10 }}
+  run: |
+    echo "::warning::${{ steps.scan.outputs.open-count }} open ports on staging"
+```
+
+**UDP scan in CI:**
+
+```yaml
+- uses: jakobbartoschek/porthawk@v0.9.0
+  with:
+    target: ${{ secrets.STAGING_HOST }}
+    scan-mode: udp
+    timeout: '2.0'
+```
+
+---
+
+## 20. SARIF Output for GitHub Security Tab
+
+**Scenario:** Generate a SARIF file from a scan and upload it manually (without the action).
+
+```bash
+# Generate SARIF alongside JSON
+porthawk -t 192.168.1.1 --common -o json,sarif
+
+# File lands in reports/scan_YYYYMMDD_HHMMSS.sarif
+```
+
+Upload it in a workflow:
+
+```yaml
+- name: Scan
+  run: porthawk -t $TARGET --common -o json,sarif --no-live
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: reports/
+    category: porthawk
+```
+
+Programmatic SARIF generation:
+
+```python
+import json
+import porthawk
+
+report = porthawk.build_report(
+    target="192.168.1.1",
+    results=my_results,
+    protocol="tcp",
+    timeout=1.0,
+    max_concurrent=100,
+)
+
+sarif = porthawk.build_sarif(report, version=porthawk.__version__)
+print(f"{len(sarif['runs'][0]['results'])} open ports as SARIF findings")
+
+with open("results.sarif", "w") as f:
+    json.dump(sarif, f, indent=2)
+```
+
+Risk level → SARIF severity:
+- **HIGH** → `error` (security-severity: 8.5) — shows as "Critical/High" in Security tab
+- **MEDIUM** → `warning` (security-severity: 5.5) — "Medium"
+- **LOW** → `note` (security-severity: 2.0) — "Low"
+- No classification → `note` (security-severity: 1.0)
+
+---
+
 ## Common Error Messages
 
 ### `ValueError: Invalid port range 1024-80: must be 1–65535 with lo ≤ hi`

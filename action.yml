@@ -1,0 +1,131 @@
+name: 'PortHawk Security Scan'
+description: 'Async port scanner — finds open ports, grades risk, uploads SARIF to GitHub Security tab'
+author: 'Jakob Bartoschek'
+
+branding:
+  icon: 'shield'
+  color: 'red'
+
+inputs:
+  target:
+    description: 'Target IP, hostname, or CIDR range (e.g. 192.168.1.1, 10.0.0.0/24)'
+    required: true
+
+  ports:
+    description: |
+      Port specification:
+        common       — top 100 TCP ports (default)
+        full         — all 65535 ports
+        1-1024       — range
+        22,80,443    — list
+    required: false
+    default: 'common'
+
+  scan-mode:
+    description: |
+      Scan type:
+        tcp     — async TCP connect scan (default, no privileges needed)
+        udp     — UDP scan with protocol-specific payloads (DNS, NTP, SNMP, ...)
+        syn     — half-open SYN scan (requires root/admin + Scapy)
+        stealth — single-threaded, 3s timeout, less noise
+    required: false
+    default: 'tcp'
+
+  timeout:
+    description: 'Per-port connection timeout in seconds (UDP benefits from 2.0+)'
+    required: false
+    default: '1.0'
+
+  threads:
+    description: 'Max concurrent connections (UDP is capped at 50 regardless)'
+    required: false
+    default: '100'
+
+  output-formats:
+    description: 'Additional report formats beyond JSON+SARIF: html, csv, or html,csv'
+    required: false
+    default: ''
+
+  upload-sarif:
+    description: |
+      Upload SARIF to GitHub Security tab.
+      Requires: permissions: security-events: write in the calling workflow.
+    required: false
+    default: 'true'
+
+  upload-artifacts:
+    description: 'Upload scan report files as workflow artifacts'
+    required: false
+    default: 'true'
+
+  fail-on-ports:
+    description: |
+      Comma-separated list of ports that fail the workflow if found open.
+      Example: "21,23,3389" — fails if Telnet, FTP, or RDP is open.
+    required: false
+    default: ''
+
+  python-version:
+    description: 'Python version to use for the scan'
+    required: false
+    default: '3.11'
+
+outputs:
+  open-ports:
+    description: 'Comma-separated list of open port numbers found'
+    value: ${{ steps.scan.outputs.open-ports }}
+
+  open-count:
+    description: 'Number of open ports found'
+    value: ${{ steps.scan.outputs.open-count }}
+
+  report-path:
+    description: 'Path to the JSON scan report in the workflow workspace'
+    value: ${{ steps.scan.outputs.report-path }}
+
+  sarif-path:
+    description: 'Path to the SARIF file in the workflow workspace'
+    value: ${{ steps.scan.outputs.sarif-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install PortHawk
+      shell: bash
+      # installs from the action's own checkout — version matches the tag used in `uses:`
+      run: pip install --quiet "${{ github.action_path }}"
+
+    - name: Run scan
+      id: scan
+      shell: bash
+      env:
+        PH_TARGET: ${{ inputs.target }}
+        PH_PORTS: ${{ inputs.ports }}
+        PH_MODE: ${{ inputs.scan-mode }}
+        PH_TIMEOUT: ${{ inputs.timeout }}
+        PH_THREADS: ${{ inputs.threads }}
+        PH_FORMATS: ${{ inputs.output-formats }}
+        PH_FAIL_PORTS: ${{ inputs.fail-on-ports }}
+      run: python "${{ github.action_path }}/run_action.py"
+
+    - name: Upload SARIF to GitHub Security tab
+      # requires: permissions: security-events: write
+      if: ${{ inputs.upload-sarif == 'true' && steps.scan.outputs.sarif-path != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif-path }}
+        category: porthawk
+
+    - name: Upload scan reports as artifacts
+      if: ${{ inputs.upload-artifacts == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: porthawk-scan-results
+        path: reports/
+        retention-days: 30
+        if-no-files-found: warn
