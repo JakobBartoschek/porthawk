@@ -28,6 +28,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 - **Service detection** — protocol-aware banner grabbing with version extraction for SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
 - **CVE lookup** via NVD API — version-aware: "OpenSSH 8.9" returns relevant CVEs, not just everything tagged "ssh". Two-layer cache (in-memory + disk, 24h TTL) to stay within rate limits
 - **ML port prioritization** — logistic regression trained on internet-wide scan frequencies, adjusts for private IP ranges and OS hint (`pip install porthawk[ml]`)
+- **Honeypot detection** — scores a host 0.0–1.0 for honeypot likelihood based on banner signatures (Cowrie, Dionaea), ICS port patterns (Conpot), port count (T-Pot), latency uniformity, and more
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -50,6 +51,7 @@ flowchart TD
     PRED["predictor.py"]
     SDB["service_db.py"]
     CVE["cve.py"]
+    HP["honeypot.py"]
     EXC["exceptions.py"]
     REP["reporter.py"]
     OUT_JSON["JSON"]
@@ -60,6 +62,7 @@ flowchart TD
     CLI --> PRED
     CLI --> SCAN
     CLI --> CVE
+    CLI --> HP
     API --> SCAN
     API --> CVE
     API --> EXC
@@ -68,6 +71,7 @@ flowchart TD
     FP --> REP
     SDB --> REP
     CVE --> REP
+    HP --> REP
     REP --> OUT_JSON
     REP --> OUT_CSV
     REP --> OUT_HTML
@@ -133,6 +137,11 @@ porthawk -t scanme.nmap.org --full --timeout 2.0 --threads 200
 **Stealth mode with ML port ordering — likely-open ports first:**
 ```bash
 porthawk -t 10.0.0.1 --common --stealth --smart-order
+```
+
+**Check if the target looks like a honeypot:**
+```bash
+porthawk -t 10.0.0.1 --common --banners --honeypot
 ```
 
 **UDP scan (requires admin/root):**
@@ -203,6 +212,14 @@ report    = porthawk.build_report("192.168.1.1", results)
 html_path = porthawk.reporter.save_html(report)
 ```
 
+```python
+# Check if a host looks like a honeypot
+hp = porthawk.score_honeypot(results)
+print(f"{hp.verdict}  score={hp.score:.2f}  confidence={hp.confidence}")
+for ind in hp.indicators:
+    print(f"  [{ind.weight:.2f}] {ind.name}: {ind.description}")
+```
+
 Full API reference: [`docs/api.md`](docs/api.md)
 
 ---
@@ -217,7 +234,7 @@ Full API reference: [`docs/api.md`](docs/api.md)
     "total_ports": 100,
     "open_ports": 5,
     "protocol": "tcp",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "timeout": 1.0,
     "max_concurrent": 500
   },
@@ -288,6 +305,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] Version-aware service detection (SSH, FTP, MySQL, Redis, ...)
 - [x] ML port prioritization via logistic regression
 - [x] Persistent CVE disk cache with TTL
+- [x] Honeypot detection — score-based detection for Cowrie, Dionaea, Conpot, T-Pot
 - [ ] Nmap XML import and diff/compare mode
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports

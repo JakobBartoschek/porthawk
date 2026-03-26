@@ -272,6 +272,74 @@ except porthawk.PortHawkError as e:
 
 ---
 
+## Honeypot Detection
+
+Score a host for honeypot likelihood based on what was found in the scan.
+No network calls — purely analyzes the `ScanResult` list you already have.
+Banners improve accuracy significantly; without them you only get port-based checks.
+
+```python
+import asyncio
+import porthawk
+
+results = asyncio.run(porthawk.scan("10.0.0.1", ports="common", banners=True))
+hp = porthawk.score_honeypot(results)
+
+print(f"Score: {hp.score:.2f}  Verdict: {hp.verdict}  Confidence: {hp.confidence}")
+for ind in hp.indicators:
+    print(f"  [{ind.weight:.2f}] {ind.name}: {ind.description}")
+```
+
+### `porthawk.score_honeypot()`
+
+```python
+def score_honeypot(results: list[ScanResult]) -> HoneypotReport
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `results` | `list[ScanResult]` | All scan results — closed/filtered ports are ignored automatically |
+
+**Returns:** `HoneypotReport`
+
+### `HoneypotReport`
+
+```python
+@dataclass
+class HoneypotReport:
+    score: float           # 0.0 (probably real) to 1.0 (almost certainly a honeypot)
+    verdict: str           # "LIKELY_REAL", "SUSPICIOUS", or "LIKELY_HONEYPOT"
+    confidence: str        # "LOW", "MEDIUM", or "HIGH" — based on indicator count
+    indicators: list[Indicator]
+    open_port_count: int
+```
+
+Verdict thresholds: `< 0.25` → LIKELY_REAL, `0.25–0.55` → SUSPICIOUS, `> 0.55` → LIKELY_HONEYPOT
+
+### `Indicator`
+
+```python
+@dataclass
+class Indicator:
+    name: str         # e.g. "cowrie_ssh_banner", "ics_multi_port"
+    weight: float     # contribution to the combined score (0.0–1.0)
+    description: str  # human-readable explanation
+```
+
+Score formula: `1 - product(1 - weight_i)` — multiple weak signals accumulate without any single one maxing the score.
+
+Detected patterns:
+- **Cowrie SSH**: exact match against known default banners (EOL Debian/Ubuntu SSH strings)
+- **Dionaea FTP**: Synology FTP emulation banner hardcoded in Dionaea's config
+- **Conpot ICS**: Modbus (502), S7 (102), BACnet (47808), EtherNet/IP (44818), DNP3 (20000), OPC-UA (4840)
+- **T-Pot port flood**: >20 open ports (moderate signal), >40 open ports (strong signal)
+- **Telnet open**: port 23 open in 2025 is unusual on real infra
+- **SSH multi-port**: same SSH banner appearing on port 22 and an alt port
+- **Service diversity**: 6+ different service categories active simultaneously
+- **Uniform latency**: latency CV < 0.05 across 5+ ports — suggests software-emulated responses
+
+---
+
 ## PyPI Publishing
 
 ```bash

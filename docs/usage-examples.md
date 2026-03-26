@@ -267,6 +267,54 @@ high_risk = [r for r in results if r.risk_level == "HIGH"]
 
 ---
 
+## 13. Honeypot Check Before You Do Anything Stupid
+
+**Scenario:** You found a host in scope that has telnet open, Redis exposed, and FTP. Something feels off.
+
+```bash
+porthawk -t 10.0.0.50 --common --banners --honeypot
+```
+
+What happens:
+- Scans ports, grabs banners
+- Runs the honeypot scorer against the results
+- Prints a score (0.0–1.0), a verdict, and which indicators fired
+
+Expected output if it's suspicious:
+```
+Honeypot check: score=0.72  verdict=LIKELY_HONEYPOT  confidence=HIGH  (7 open ports analyzed)
+  ⚑ [0.60] cowrie_ssh_banner: SSH banner matches known Cowrie default: 'SSH-2.0-OpenSSH_6.0p1 Debian-4+deb7u2'
+  ⚑ [0.25] telnet_open: Telnet (port 23) is open — rare on real hosts, common on honeypots
+```
+
+The scorer checks for:
+- **Cowrie** SSH banners — specific EOL Debian/Ubuntu strings Cowrie ships as defaults
+- **Dionaea** FTP — `"220 DiskStation FTP server ready."` is literally hardcoded in Dionaea
+- **Conpot** ICS ports — Modbus (502), S7 (102), BACnet (47808), DNP3 (20000) etc.
+- **T-Pot** port flood — >20 open ports is unusual, >40 is a big flag
+- Telnet open (port 23)
+- Same SSH banner responding on multiple ports
+- Suspiciously uniform latency across ports (software-emulated responses)
+
+Score is not binary. SUSPICIOUS (0.25–0.55) means "proceed carefully but don't abort."
+LIKELY_HONEYPOT (>0.55) means stop and verify with your scope owner before continuing.
+
+Programmatic use:
+
+```python
+import asyncio, porthawk
+
+results = asyncio.run(porthawk.scan("10.0.0.50", ports="common", banners=True))
+hp = porthawk.score_honeypot(results)
+
+if hp.verdict == "LIKELY_HONEYPOT":
+    print(f"Stop. Score {hp.score:.2f} — this looks like a honeypot.")
+    for ind in hp.indicators:
+        print(f"  {ind.name}: {ind.description}")
+```
+
+---
+
 ## Common Error Messages
 
 ### `PermissionError: UDP scanning needs admin/root privileges`

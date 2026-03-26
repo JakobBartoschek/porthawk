@@ -5,6 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [0.3.0] — 2026-03-26
+
+### Honeypot Detection
+
+- `porthawk.score_honeypot(results)` — returns a `HoneypotReport` with a 0.0–1.0 score and list of triggered indicators
+- Cowrie SSH detection: exact banner match against known Cowrie default strings (EOL Debian/Ubuntu SSH versions)
+- Dionaea FTP detection: `"220 DiskStation FTP server ready."` banner match — hardcoded in Dionaea's FTP emulator
+- Conpot ICS detection: flags hosts with Modbus (502), S7 (102), BACnet (47808), EtherNet/IP (44818), DNP3 (20000), OPC-UA (4840) ports open
+- T-Pot port flood detection: >20 open ports = moderate signal, >40 = strong signal
+- Telnet (port 23) presence check
+- SSH multi-port check: same banner version on port 22 and alternate ports
+- Service diversity check: 6+ different service categories simultaneously active
+- Latency uniformity check: CV < 0.05 across 5+ ports suggests software emulation
+- Score combination via `1 - product(1 - w_i)` — no single indicator maxes the score
+- Verdicts: `< 0.25` → LIKELY_REAL, `0.25–0.55` → SUSPICIOUS, `> 0.55` → LIKELY_HONEYPOT
+- `--honeypot` CLI flag — runs scorer after scan and prints result with Rich formatting
+- `porthawk.HoneypotReport`, `porthawk.Indicator` exported from public API
+- 49 new tests in `tests/test_honeypot.py`
+
+---
+
 ## [0.2.0] — 2026-03-26
 
 ### Service Detection
