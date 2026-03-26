@@ -5,6 +5,54 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [1.0.0] — 2026-03-27
+
+### Nmap XML import + scan diff
+
+Two things that were annoying not to have: loading Nmap output directly, and comparing two scans to see what changed.
+
+**New module: `porthawk/nmap_import.py`**
+
+- `parse_nmap_xml(source)` — parses Nmap `-oX` XML output into `ScanResult` list
+- Handles multi-host scans, down hosts, IPv4/IPv6/hostname address fallback
+- Extracts service name, product, version from `<service>` elements
+- Maps all Nmap states: `open`, `closed`, `filtered`, `unfiltered`, `open|filtered`, `closed|filtered`
+- No extra dependencies — `xml.etree.ElementTree` from stdlib
+
+**New module: `porthawk/diff.py`**
+
+- `compute_diff(results_a, results_b)` — compares two lists of `ScanResult`
+- Key is `(host, port, protocol)` — protocol matters, TCP/53 and UDP/53 are different
+- Change types: `new` (OPEN in B, not in A), `gone` (OPEN in A, not in B), `changed` (same port, different state/service/version/risk), `stable` (unchanged, excluded by default)
+- `load_results(path)` — auto-detects PortHawk JSON or Nmap XML by extension, falls back to content sniffing
+- `save_diff_json(diff, output_path)` — writes diff as JSON
+- `ScanDiff.has_regressions` — True if any new HIGH or MEDIUM ports appeared
+- `PortChange.describe()` — one-line human-readable summary with `+`, `-`, `~` prefix
+
+**New: `diff` subcommand in CLI**
+
+```bash
+porthawk diff scan_a.json scan_b.xml
+porthawk diff baseline.json current.json --only-new --exit-on-new
+porthawk diff a.json b.json --show-stable -o diff.json
+```
+
+Flags:
+- `--show-stable` — include unchanged ports in output (off by default)
+- `--only-new` — only show new open ports
+- `--exit-on-new` — exit code 1 if any new open port detected (CI integration)
+- `-o path` — write diff as JSON to file
+
+**Public API additions:**
+
+```python
+from porthawk import compute_diff, load_results, ScanDiff, PortChange, parse_nmap_xml
+```
+
+**65 new tests** — `tests/test_nmap_import.py` (26 tests), `tests/test_diff.py` (52 tests). Total: 727 tests.
+
+---
+
 ## [0.9.0] — 2026-03-27
 
 ### GitHub Action + SARIF output

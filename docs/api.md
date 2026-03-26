@@ -799,6 +799,101 @@ Writes a SARIF file to `reports/scan_YYYYMMDD_HHMMSS.sarif` (or `output_path` if
 
 ---
 
+## Nmap Import + Scan Diff
+
+### `porthawk.parse_nmap_xml()`
+
+```python
+def parse_nmap_xml(source: str | Path) -> list[ScanResult]:
+```
+
+Loads a Nmap `-oX` XML file into a flat list of `ScanResult`. Handles multi-host scans, down hosts, all Nmap port states, and service info extraction.
+
+```python
+from porthawk import parse_nmap_xml
+
+results = parse_nmap_xml("nmap_output.xml")
+for r in results:
+    print(f"{r.host}:{r.port}/{r.protocol} — {r.state}")
+```
+
+Raises `FileNotFoundError` if the file doesn't exist, `ValueError` if the XML is malformed.
+
+---
+
+### `porthawk.load_results()`
+
+```python
+def load_results(path: str | Path) -> list[ScanResult]:
+```
+
+Auto-detects format and loads results. Tries file extension first (`.json` → PortHawk JSON, `.xml` → Nmap XML), then sniffs the first 200 bytes if there's no extension. Raises `ValueError` for unknown formats.
+
+---
+
+### `porthawk.compute_diff()`
+
+```python
+def compute_diff(
+    results_a: list[ScanResult],
+    results_b: list[ScanResult],
+    label_a: str = "scan_a",
+    label_b: str = "scan_b",
+    include_stable: bool = False,
+) -> ScanDiff:
+```
+
+Compares two scan result lists. Key is `(host, port, protocol)`.
+
+Change types:
+- `new` — port is OPEN in B but not in A (potential new exposure)
+- `gone` — port was OPEN in A but missing in B (service gone or firewalled)
+- `changed` — same port, but state/service_name/service_version/risk_level differs
+- `stable` — nothing changed (excluded by default, enable with `include_stable=True`)
+
+```python
+from porthawk import load_results, compute_diff
+
+old = load_results("baseline.json")
+new = load_results("current.xml")
+
+diff = compute_diff(old, new, label_a="baseline", label_b="current")
+print(f"New: {len(diff.new_ports)}, Gone: {len(diff.gone_ports)}, Changed: {len(diff.changed_ports)}")
+
+if diff.has_regressions:
+    print("New HIGH or MEDIUM risk ports detected!")
+
+for change in diff.changes:
+    print(change.describe())
+```
+
+### `ScanDiff` properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `new_ports` | `list[PortChange]` | Ports that appeared as OPEN in B |
+| `gone_ports` | `list[PortChange]` | Ports that were OPEN in A and are gone in B |
+| `changed_ports` | `list[PortChange]` | Ports present in both scans with different values |
+| `stable_ports` | `list[PortChange]` | Ports that didn't change (empty unless `include_stable=True`) |
+| `has_regressions` | `bool` | True if any new HIGH or MEDIUM risk ports appeared |
+
+### `PortChange.describe()`
+
+Returns a one-line human-readable summary:
+- `+ 10.0.0.1:22/tcp  ssh  [MEDIUM]` — new port
+- `- 10.0.0.1:23/tcp  telnet  [HIGH]` — gone port
+- `~ 10.0.0.1:22/tcp  ssh  version: 7.9 → 8.9p1` — changed port
+
+### `porthawk.diff.save_diff_json()`
+
+```python
+def save_diff_json(diff: ScanDiff, output_path: Path | None = None) -> Path:
+```
+
+Writes a `ScanDiff` to JSON. Default path: `reports/diff_YYYYMMDD_HHMMSS.json`.
+
+---
+
 ## PyPI Publishing
 
 ```bash

@@ -24,7 +24,8 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 
 - **Async TCP scanning** via `asyncio` — 500 concurrent connections by default, configurable
 - **UDP scanning** — protocol-specific payloads for DNS, NTP, SNMP, SSDP, NetBIOS, mDNS, IKE, TFTP. Validates responses, extracts banners. ICMP unreachable detection for closed ports. Defaults to top 20 UDP ports.
-- **GitHub Action** — drop `uses: jakobbartoschek/porthawk@v0.9.0` into any workflow. Scan a host, get open ports in the Security tab as SARIF alerts, download reports as artifacts.
+- **Nmap XML import + diff** — load any Nmap `-oX` output and compare two scans to see what changed: new open ports, gone services, version upgrades. Works with PortHawk JSON too.
+- **GitHub Action** — drop `uses: jakobbartoschek/porthawk@v1.0.0` into any workflow. Scan a host, get open ports in the Security tab as SARIF alerts, download reports as artifacts.
 - **SARIF output** — `-o sarif` writes a SARIF 2.1.0 file. Open ports become Security tab alerts with risk severity mapped to SARIF levels.
 - **OS fingerprinting** from TTL value — Linux/Unix, Windows, Network Device
 - **Service detection** — protocol-aware banner grabbing with version extraction for SSH, FTP, SMTP, POP3, IMAP, VNC, MySQL, Redis, Memcached
@@ -201,6 +202,40 @@ porthawk -t 192.168.1.1 --udp -p 53,123,161,1900
 
 # Slower networks — bump the timeout
 porthawk -t 192.168.1.1 --udp --timeout 3.0
+```
+
+**Compare two scans — see what changed between Monday and Friday:**
+```bash
+# Both PortHawk JSON and Nmap XML work
+porthawk diff scan_monday.json scan_friday.json
+
+# Include ports that didn't change (omitted by default — usually just noise)
+porthawk diff scan_a.json scan_b.json --show-stable
+
+# Exit with code 1 if any new open ports appear (useful in CI)
+porthawk diff baseline.json current.json --exit-on-new
+
+# Only show new ports
+porthawk diff baseline.json current.json --only-new
+
+# Save the diff as JSON
+porthawk diff scan_a.json nmap_output.xml -o diff_report.json
+
+# Mix formats — compare an old PortHawk scan against a fresh Nmap run
+porthawk diff last_month.json nmap -oX current.xml 192.168.1.1; porthawk diff last_month.json current.xml
+```
+
+**Load Nmap XML directly (programmatic):**
+```python
+from porthawk import load_results, compute_diff
+
+old = load_results("baseline.json")      # PortHawk JSON
+new = load_results("nmap_output.xml")    # Nmap -oX
+
+diff = compute_diff(old, new, label_a="baseline", label_b="current")
+print(f"New open ports: {len(diff.new_ports)}")
+for change in diff.new_ports:
+    print(change.describe())
 ```
 
 **Disable the live UI (for scripts, pipes, CI):**
@@ -473,8 +508,8 @@ All network calls are mocked — tests run without any real connections.
 - [x] IDS/IPS evasion — Slow & Low mode: IP fragmentation, jitter, decoys, custom TCP flags
 - [x] Passive OS fingerprinting — TCP stack analysis from SYN-ACK, rule-based + KNN classifier
 - [x] UDP scanning — protocol-specific payloads, ICMP unreachable detection, 8 protocols
-- [x] GitHub Action — `uses: jakobbartoschek/porthawk@v0.9.0`, SARIF to Security tab, artifact upload
-- [ ] Nmap XML import and diff/compare mode
+- [x] GitHub Action — `uses: jakobbartoschek/porthawk@v1.0.0`, SARIF to Security tab, artifact upload
+- [x] Nmap XML import and diff/compare mode — `porthawk diff a.json b.xml`, new/gone/changed detection
 - [ ] Web dashboard with Flask
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
 - [ ] IPv6 support
