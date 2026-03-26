@@ -18,6 +18,7 @@ Context manager::
 """
 
 from porthawk.api import Scanner, scan
+from porthawk.cve import CVEInfo
 from porthawk.exceptions import (
     InvalidPortSpecError,
     InvalidTargetError,
@@ -42,6 +43,8 @@ __all__ = [
     "PortState",
     # Report builder (for custom rendering)
     "build_report",
+    # CVE lookup
+    "CVEInfo",
     # Exceptions
     "PortHawkError",
     "InvalidTargetError",
