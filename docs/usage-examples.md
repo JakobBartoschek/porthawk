@@ -374,6 +374,54 @@ if hp.verdict == "LIKELY_HONEYPOT":
 
 ---
 
+## 15. SYN Scan — Half-Open TCP
+
+Sends a SYN, reads the response, never completes the handshake. Leaves less noise
+in server logs than a full connect scan. Requires root/admin and either Scapy or Linux raw sockets.
+
+```bash
+# install Scapy first (or rely on Linux raw sockets)
+pip install porthawk[syn]
+
+# run as root/Administrator
+sudo porthawk -t 192.168.1.1 --common --syn
+```
+
+Output shows the backend being used:
+
+```
+SYN scan backend: scapy 2.5.0
+```
+
+Check what backend you'll get before scanning:
+
+```python
+import porthawk
+print(porthawk.get_syn_backend())
+# scapy 2.5.0        → cross-platform, Scapy installed
+# raw socket (Linux) → no Scapy, but running on Linux as root
+# unavailable (Windows needs Scapy + Npcap)  → install Npcap first
+```
+
+Programmatic SYN scan:
+
+```python
+import asyncio
+import porthawk
+
+# must be root/admin
+results = asyncio.run(
+    porthawk.syn_scan_host("192.168.1.1", [22, 80, 443, 3306], timeout=1.0)
+)
+open_ports = [r for r in results if r.state.value == "open"]
+print(f"{len(open_ports)} open ports")
+```
+
+On Windows without Scapy: `ScanPermissionError` with instructions to install Npcap
+from npcap.com and run `pip install porthawk[syn]`.
+
+---
+
 ## Common Error Messages
 
 ### `PermissionError: UDP scanning needs admin/root privileges`
