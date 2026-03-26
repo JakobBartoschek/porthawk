@@ -45,7 +45,7 @@ flowchart TD
     API["api.py\n(public Python API)"]
     SCAN["scanner.py\n(asyncio TCP/UDP)"]
     FP["fingerprint.py\n(banner, TTL, HTTP)"]
-    SDB["service_db.py\n(port→service, risk)"]
+    SDB["service_db.py\n(port-to-service, risk)"]
     CVE["cve.py\n(NVD API lookup)"]
     EXC["exceptions.py\n(error hierarchy)"]
     REP["reporter.py\n(formatting)"]
