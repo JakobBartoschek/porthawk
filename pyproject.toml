@@ -40,9 +40,15 @@ ml = [
 syn = [
     "scapy>=2.5",
 ]
+dashboard = [
+    "streamlit>=1.28",
+    "altair>=5.0",
+    "pandas>=2.0",
+]
 
 [project.scripts]
 porthawk = "porthawk.cli:main"
+porthawk-dashboard = "porthawk.dashboard:launch"
 
 [project.urls]
 Homepage = "https://github.com/JakobBartoschek/porthawk"
