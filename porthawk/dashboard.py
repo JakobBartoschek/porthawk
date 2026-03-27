@@ -125,6 +125,8 @@ def _init_state() -> None:
         "dash_timeout": 1.0,
         "dash_threads": 500,
         "dash_include_closed": False,
+        "dash_port_mode": "Common (100)",
+        "preset_active": False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -439,7 +441,12 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         ):
             st.session_state["dash_timeout"] = 0.5
             st.session_state["dash_threads"] = 300
+            st.session_state["dash_port_mode"] = "Common (100)"
+            st.session_state["preset_active"] = True
             st.rerun()
+
+        if st.session_state.get("preset_active"):
+            st.caption("⚡ Preset active — 0.5 s timeout · 300 threads · Common ports")
 
         st.markdown("---")
 
@@ -455,7 +462,7 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         port_mode = st.radio(
             "Range",
             ["Common (100)", "Top 1000", "Full (65535)", "Custom"],
-            index=0,  # always default to common — fast for remote hosts
+            key="dash_port_mode",
         )
         ports: str | list[int]
         if port_mode == "Common (100)":
@@ -1033,11 +1040,14 @@ def main() -> None:
         scan_target = st.session_state["scan_target"]
         st.info(f"⏳ Scanning **{scan_target}** — {time_str} elapsed")
 
-        with st.expander("Scan details", expanded=False):
+        with st.expander("Scan details", expanded=True):
             started_at = time.strftime("%H:%M:%S", time.localtime(st.session_state["scan_start"]))
             st.caption(f"Target: `{scan_target}`")
             st.caption(f"Started: {started_at}")
-            st.caption("Results appear when scan finishes — partial results are not available.")
+            st.caption(
+                "Scanning in background — results appear all at once when the scan finishes. "
+                "No partial display. Use Quick Scan preset or fewer ports for faster results."
+            )
 
         time.sleep(1.0)
         st.rerun()
