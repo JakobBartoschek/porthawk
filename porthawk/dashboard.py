@@ -424,6 +424,16 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         st.caption(f"v{porthawk.__version__}")
         st.markdown("---")
 
+        # quick-scan preset — one click fills in sensible fast defaults
+        if st.button(
+            "⚡ Quick Scan preset",
+            use_container_width=True,
+            help="Common ports, 0.5 s timeout, no enrichment — results in ~3 s",
+        ):
+            st.session_state["qs_preset"] = True
+
+        st.markdown("---")
+
         # target
         st.subheader("Target")
         target = st.text_input(
@@ -431,9 +441,16 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             placeholder="192.168.1.1  ·  10.0.0.0/24  ·  2001:db8::1  ·  fe80::/64",
         )
 
+        # preset shortcut — applied once, then cleared so it doesn't re-trigger
+        _qs = st.session_state.pop("qs_preset", False)
+
         # ports
         st.subheader("Ports")
-        port_mode = st.radio("Range", ["Common (100)", "Top 1000", "Full (65535)", "Custom"])
+        port_mode = st.radio(
+            "Range",
+            ["Common (100)", "Top 1000", "Full (65535)", "Custom"],
+            index=0,  # always default to common — fast for remote hosts
+        )
         ports: str | list[int]
         if port_mode == "Common (100)":
             ports = "common"
@@ -475,38 +492,47 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
                     help="Comma-separated fake source IPs (Scapy only)",
                 )
 
-        # enrichment options
+        # enrichment options — preset forces all off for speed
         st.subheader("Enrichment")
         c1, c2 = st.columns(2)
         with c1:
-            banners = st.checkbox("Banners", help="Grab service banners and extract versions")
-            os_detect = st.checkbox("OS (TTL)", help="Guess OS from TTL ping response")
+            banners = st.checkbox(
+                "Banners", value=False, help="Grab service banners and extract versions"
+            )
+            os_detect = st.checkbox("OS (TTL)", value=False, help="Guess OS from TTL ping response")
             passive_os = st.checkbox(
                 "Passive OS",
+                value=False,
                 help="TCP stack fingerprinting via SYN-ACK (needs root or Scapy)",
             )
         with c2:
-            cve_lookup = st.checkbox("CVE lookup", help="NVD API lookup per open service")
+            cve_lookup = st.checkbox(
+                "CVE lookup", value=False, help="NVD API lookup per open service"
+            )
             honeypot = st.checkbox(
                 "Honeypot check",
+                value=False,
                 help="Score the target for honeypot likelihood after scan",
             )
             include_closed = st.checkbox(
-                "Show closed", help="Include closed/filtered ports in results"
+                "Show closed", value=False, help="Include closed/filtered ports in results"
             )
 
-        # advanced settings
+        # advanced settings — preset forces safe fast defaults
         with st.expander("Advanced"):
             smart_order = st.checkbox(
                 "Smart port order",
+                value=False,
                 help="ML-based port prioritization — scans likely-open ports first (needs scikit-learn)",
             )
             adaptive = st.checkbox(
                 "Adaptive speed",
+                value=False,
                 help="AIMD concurrency control: starts conservative, ramps up on stable networks",
             )
-            timeout = st.slider("Timeout per port (s)", 0.1, 10.0, 1.0, 0.1)
-            threads = st.slider("Concurrency", 10, 1000, 500, 10)
+            # quick-preset overrides: 0.5 s timeout, 300 threads — enough for remote hosts
+            timeout = st.slider("Timeout per port (s)", 0.1, 10.0, 0.5 if _qs else 1.0, 0.1)
+            threads = st.slider("Concurrency", 10, 1000, 300 if _qs else 500, 10)
 
         with st.expander("Notifications"):
             slack_webhook = st.text_input(
