@@ -327,6 +327,8 @@ def _scan_worker(target: str, opts: ScanOptions) -> None:
         from porthawk.service_db import get_top_ports
 
         targets = expand_cidr(target)
+        if not targets:
+            raise ValueError(f"Invalid or empty target: {target!r}")
 
         # resolve port list from opts
         if isinstance(opts.ports, list):
@@ -556,7 +558,7 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         st.markdown("---")
         start = st.button(
             "🚀 Start Scan",
-            disabled=bool(st.session_state["scan_running"]) or not bool(target),
+            disabled=bool(st.session_state["scan_running"]) or not bool(target.strip()),
             use_container_width=True,
             type="primary",
         )

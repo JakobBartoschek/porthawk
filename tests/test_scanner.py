@@ -185,6 +185,21 @@ class TestExpandCidr:
         assert "10.0.0.1" in hosts
         assert "10.0.0.2" in hosts
 
+    def test_empty_string_returns_empty_list(self):
+        assert expand_cidr("") == []
+
+    def test_whitespace_only_returns_empty_list(self):
+        assert expand_cidr("   ") == []
+
+    def test_leading_trailing_whitespace_stripped(self):
+        assert expand_cidr("  192.168.1.1  ") == ["192.168.1.1"]
+
+    def test_whitespace_around_cidr_stripped(self):
+        hosts = expand_cidr("  10.0.0.0/30  ")
+        assert len(hosts) == 2
+        assert "10.0.0.1" in hosts
+
+
 
 # --- Port range parsing ---
 
