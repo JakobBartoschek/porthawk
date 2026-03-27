@@ -37,6 +37,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 - **SYN scan (half-open)** — raw SYN packets without completing the TCP handshake. Uses Scapy when available, falls back to Linux raw sockets. Requires root/admin. (`pip install porthawk[syn]`)
 - **IDS/IPS evasion** — "Slow & Low" mode for red-team scenarios: IP fragmentation, exponential timing jitter, decoy source IPs, custom TCP flag combos (FIN, NULL, XMAS, ACK, Maimon)
 - **Passive OS fingerprinting** — TCP/IP stack analysis from SYN-ACK responses: TTL, window size, MSS, TCP options, DF bit. Rule-based scoring + KNN classifier, 16-entry signature database (Windows, Linux, macOS, BSD, network devices). >80% OS family accuracy.
+- **Webhook alerts** — `--slack-webhook` / `--discord-webhook` CLI flags (or env vars) send a message when HIGH-risk ports are found. Dashboard has a Notifications panel for the same. No extra dependencies.
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -264,6 +265,19 @@ Opens at `http://localhost:8501`. Enter a target in the sidebar, hit **Start Sca
 - **Graph tab** — PyVis network graph (`pip install pyvis`), color-coded by risk
 - **Diff tab** — compare two scan files (PortHawk JSON or Nmap XML)
 - **Export tab** — download JSON, CSV, HTML, or SARIF report
+
+**Slack/Discord alerts for HIGH-risk ports:**
+```bash
+# one-off
+porthawk scan -t 10.0.0.1 --common --slack-webhook https://hooks.slack.com/services/…
+
+# via env vars (add to .bashrc / CI secrets)
+export PORTHAWK_SLACK_WEBHOOK=https://hooks.slack.com/services/…
+export PORTHAWK_DISCORD_WEBHOOK=https://discord.com/api/webhooks/…
+porthawk scan -t 10.0.0.1 --common
+```
+
+Nothing fires if there are no HIGH-risk findings. One message per scan.
 
 **Disable the live UI (for scripts, pipes, CI):**
 ```bash
@@ -538,7 +552,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] GitHub Action — `uses: jakobbartoschek/porthawk@v1.0.0`, SARIF to Security tab, artifact upload
 - [x] Nmap XML import and diff/compare mode — `porthawk diff a.json b.xml`, new/gone/changed detection
 - [x] Web dashboard — Streamlit, `pip install porthawk[dashboard]`, one-click launchers for all platforms
-- [ ] Slack and Discord webhook alerts for HIGH-risk open ports
+- [x] Slack and Discord webhook alerts for HIGH-risk open ports — `--slack-webhook`, `--discord-webhook`, env vars, dashboard panel
 - [ ] IPv6 support
 
 ---
