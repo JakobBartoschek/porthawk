@@ -212,3 +212,33 @@ class TestResultsToRowsTTL:
     def test_ttl_missing_dash(self):
         rows = results_to_rows([_r(80, ttl=None)])
         assert rows[0]["TTL"] == "—"
+
+
+# ---------------------------------------------------------------------------
+# results_to_rows — include_closed flag
+# ---------------------------------------------------------------------------
+
+
+class TestResultsToRowsIncludeClosed:
+    def test_closed_included_when_flag_set(self):
+        rows = results_to_rows([_r(9999, state=PortState.CLOSED)], include_closed=True)
+        assert len(rows) == 1
+        assert rows[0]["Port"] == 9999
+
+    def test_filtered_included_when_flag_set(self):
+        rows = results_to_rows([_r(9999, state=PortState.FILTERED)], include_closed=True)
+        assert len(rows) == 1
+
+    def test_open_always_included(self):
+        rows = results_to_rows([_r(80)], include_closed=False)
+        assert len(rows) == 1
+
+    def test_mixed_include_closed_true(self):
+        results = [_r(80), _r(22), _r(9999, state=PortState.CLOSED)]
+        rows = results_to_rows(results, include_closed=True)
+        assert len(rows) == 3
+
+    def test_mixed_include_closed_false(self):
+        results = [_r(80), _r(22), _r(9999, state=PortState.CLOSED)]
+        rows = results_to_rows(results, include_closed=False)
+        assert len(rows) == 2
