@@ -9,6 +9,11 @@ pytest-asyncio>=0.23
 pytest-mock>=3.10
 pytest-cov>=4.0
 
+# Dashboard optional deps — needed so test_dashboard.py can import porthawk.dashboard
+streamlit>=1.28
+altair>=5.0
+pandas>=2.0
+
 # Code quality — not installed locally on Windows dev machine,
 # but installed in CI (ubuntu-latest via GitHub Actions)
 black>=24.0
