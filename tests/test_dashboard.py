@@ -4,7 +4,7 @@ Only the pure data-preparation functions are tested here — no Streamlit,
 no browser, no network. The UI rendering itself isn't unit-testable.
 """
 
-from porthawk.dashboard import results_to_rows, risk_distribution, service_distribution
+from porthawk.dashboard import honeypot_badge, results_to_rows, risk_distribution, service_distribution
 from porthawk.scanner import PortState, ScanResult
 
 
@@ -15,6 +15,7 @@ def _r(
     risk: str | None = "LOW",
     banner: str | None = None,
     version: str | None = None,
+    ttl: int | None = None,
 ) -> ScanResult:
     return ScanResult(
         host="10.0.0.1",
@@ -25,6 +26,7 @@ def _r(
         risk_level=risk,
         banner=banner,
         service_version=version,
+        ttl=ttl,
     )
 
 
@@ -165,3 +167,48 @@ class TestServiceDistribution:
 
     def test_empty_input(self):
         assert service_distribution([]) == {}
+
+
+# ---------------------------------------------------------------------------
+# honeypot_badge
+# ---------------------------------------------------------------------------
+
+
+class TestHoneypotBadge:
+    def test_likely_honeypot_returns_error(self):
+        level, text = honeypot_badge(0.85, "LIKELY_HONEYPOT")
+        assert level == "error"
+        assert "🪤" in text
+        assert "0.85" in text
+
+    def test_suspicious_returns_warning(self):
+        level, text = honeypot_badge(0.55, "SUSPICIOUS")
+        assert level == "warning"
+        assert "⚠️" in text
+        assert "0.55" in text
+
+    def test_real_returns_success(self):
+        level, text = honeypot_badge(0.1, "REAL")
+        assert level == "success"
+        assert "✅" in text
+        assert "0.10" in text
+
+    def test_unknown_verdict_returns_success(self):
+        # any verdict that isn't a red flag → treat as real
+        level, _ = honeypot_badge(0.0, "UNKNOWN")
+        assert level == "success"
+
+
+# ---------------------------------------------------------------------------
+# results_to_rows — TTL field
+# ---------------------------------------------------------------------------
+
+
+class TestResultsToRowsTTL:
+    def test_ttl_present(self):
+        rows = results_to_rows([_r(80, ttl=64)])
+        assert rows[0]["TTL"] == 64
+
+    def test_ttl_missing_dash(self):
+        rows = results_to_rows([_r(80, ttl=None)])
+        assert rows[0]["TTL"] == "—"
