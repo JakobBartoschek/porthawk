@@ -849,7 +849,7 @@ def render_diff_tab() -> None:
     if not (file_a and file_b):
         return
 
-    show_stable = st.checkbox("Show unchanged ports")
+    show_stable = st.checkbox("Show unchanged ports", key="diff_show_stable")
     if not st.button("🔍 Compare", type="primary"):
         return
 
@@ -970,27 +970,37 @@ def render_export_tab() -> None:
     report = st.session_state["report"]
     st.subheader("Download scan reports")
 
-    c1, c2, c3, c4 = st.columns(4)
-    json_path = None
-    for col, (label, mime, save_fn) in zip(
-        [c1, c2, c3, c4],
-        [
-            ("📄 JSON", "application/json", save_json),
-            ("📊 CSV", "text/csv", save_csv),
-            ("🌐 HTML", "text/html", save_html),
-            ("🛡️ SARIF", "application/json", save_sarif),
-        ],
-        strict=False,
-    ):
-        p = save_fn(report)
-        if json_path is None:
-            json_path = p
-        col.download_button(
-            label, data=p.read_bytes(), file_name=p.name, mime=mime, use_container_width=True
-        )
+    # generate file content once per render, in memory — don't write to disk on every render
+    # save_* functions write files; calling them every render spams the reports/ folder
+    # with duplicate files. Cache the bytes in session_state keyed to the report object id
+    # so they are only generated once after each scan.
+    cache_key = f"_export_cache_{id(report)}"
+    if cache_key not in st.session_state:
 
-    if json_path:
-        st.caption(f"Files also saved to: `{json_path.parent}`")
+        def _capture(save_fn: Any) -> bytes:
+            p = save_fn(report)
+            data = p.read_bytes()
+            return data
+
+        st.session_state[cache_key] = {
+            "json": (_capture(save_json), "scan.json", "application/json"),
+            "csv": (_capture(save_csv), "scan.csv", "text/csv"),
+            "html": (_capture(save_html), "scan.html", "text/html"),
+            "sarif": (_capture(save_sarif), "scan.sarif.json", "application/json"),
+        }
+
+    cached = st.session_state[cache_key]
+    c1, c2, c3, c4 = st.columns(4)
+    for col, key, label in [
+        (c1, "json", "📄 JSON"),
+        (c2, "csv", "📊 CSV"),
+        (c3, "html", "🌐 HTML"),
+        (c4, "sarif", "🛡️ SARIF"),
+    ]:
+        data, fname, mime = cached[key]
+        col.download_button(label, data=data, file_name=fname, mime=mime, use_container_width=True)
+
+    st.caption("Files are saved to the `reports/` folder in the project directory.")
 
 
 # ---------------------------------------------------------------------------
@@ -1008,7 +1018,25 @@ def main() -> None:
     # poll every second while scan is running
     if st.session_state["scan_running"]:
         elapsed = int(time.time() - st.session_state["scan_start"])
-        st.info(f"⏳ Scanning **{st.session_state['scan_target']}** — {elapsed}s elapsed…")
+
+        # safety valve: if the thread died without clearing scan_running (e.g. page reload
+        # killed the daemon thread), the flag stays True forever. After 5 min we give up.
+        if elapsed > 300:
+            st.session_state["scan_running"] = False
+            st.session_state["scan_error"] = "Scan timed out — the background thread may have died."
+            st.rerun()
+
+        mins, secs = divmod(elapsed, 60)
+        time_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
+        scan_target = st.session_state["scan_target"]
+        st.info(f"⏳ Scanning **{scan_target}** — {time_str} elapsed")
+
+        with st.expander("Scan details", expanded=False):
+            started_at = time.strftime("%H:%M:%S", time.localtime(st.session_state["scan_start"]))
+            st.caption(f"Target: `{scan_target}`")
+            st.caption(f"Started: {started_at}")
+            st.caption("Results appear when scan finishes — partial results are not available.")
+
         time.sleep(1.0)
         st.rerun()
 
