@@ -182,6 +182,22 @@ def scan(
             "Requires Scapy or root + Linux/macOS.",
         ),
     ] = False,
+    slack_webhook: Annotated[
+        str | None,
+        typer.Option(
+            "--slack-webhook",
+            help="Slack incoming webhook URL. Sends an alert if any HIGH-risk ports are found.",
+            envvar="PORTHAWK_SLACK_WEBHOOK",
+        ),
+    ] = None,
+    discord_webhook: Annotated[
+        str | None,
+        typer.Option(
+            "--discord-webhook",
+            help="Discord webhook URL. Sends an alert if any HIGH-risk ports are found.",
+            envvar="PORTHAWK_DISCORD_WEBHOOK",
+        ),
+    ] = None,
     version: Annotated[
         bool | None, typer.Option("--version", callback=version_callback, is_eager=True)
     ] = None,
@@ -333,6 +349,7 @@ def scan(
 
     print_terminal(report, show_closed=show_closed, show_cves=cve)
     _save_outputs(report, output)
+    _send_webhooks(flat_results, target, slack_webhook, discord_webhook)
 
 
 def _resolve_port_list(
@@ -585,6 +602,40 @@ def _print_honeypot_report(results: list) -> None:
             )
     else:
         console.print("  [dim]No honeypot indicators detected[/dim]")
+
+
+def _send_webhooks(
+    results: list,
+    target: str,
+    slack_webhook: str | None,
+    discord_webhook: str | None,
+) -> None:
+    """Fire Slack/Discord alerts if HIGH-risk ports were found.
+
+    Imported lazily so the notify module doesn't load on every CLI invocation.
+    """
+    if not slack_webhook and not discord_webhook:
+        return
+
+    import urllib.error
+
+    from porthawk.notify import send_discord, send_slack
+
+    if slack_webhook:
+        try:
+            count = send_slack(slack_webhook, results, target)
+            if count:
+                console.print(f"[dim]Slack: sent alert for {count} HIGH-risk port(s)[/dim]")
+        except urllib.error.HTTPError as exc:
+            console.print(f"[yellow]Slack webhook failed: {exc.code} {exc.reason}[/yellow]")
+
+    if discord_webhook:
+        try:
+            count = send_discord(discord_webhook, results, target)
+            if count:
+                console.print(f"[dim]Discord: sent alert for {count} HIGH-risk port(s)[/dim]")
+        except urllib.error.HTTPError as exc:
+            console.print(f"[yellow]Discord webhook failed: {exc.code} {exc.reason}[/yellow]")
 
 
 def _print_passive_os(host: str) -> None:

@@ -151,6 +151,8 @@ class ScanOptions:
     jitter: float = 0.0
     fragment: bool = False
     decoys: str = ""
+    slack_webhook: str = ""
+    discord_webhook: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +287,30 @@ async def _attach_cves(results: list[ScanResult]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Webhook helpers
+# ---------------------------------------------------------------------------
+
+
+def _fire_webhooks(results: list[ScanResult], target: str, opts: ScanOptions) -> None:
+    """Send Slack/Discord alerts for HIGH-risk ports. Silently ignores network errors."""
+    import urllib.error
+
+    from porthawk.notify import send_discord, send_slack
+
+    if opts.slack_webhook:
+        try:
+            send_slack(opts.slack_webhook, results, target)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+            pass  # don't crash the scan thread over a webhook hiccup
+
+    if opts.discord_webhook:
+        try:
+            send_discord(opts.discord_webhook, results, target)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+            pass
+
+
+# ---------------------------------------------------------------------------
 # Background worker
 # ---------------------------------------------------------------------------
 
@@ -352,6 +378,9 @@ def _scan_worker(target: str, opts: ScanOptions) -> None:
             timeout=effective_timeout,
             max_concurrent=effective_threads,
         )
+
+        # fire webhooks before writing session state so errors don't silence the alert
+        _fire_webhooks(results, target, opts)
 
         st.session_state["scan_results"] = results
         st.session_state["honeypot_report"] = honeypot_report
@@ -479,6 +508,20 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             timeout = st.slider("Timeout per port (s)", 0.1, 10.0, 1.0, 0.1)
             threads = st.slider("Concurrency", 10, 1000, 500, 10)
 
+        with st.expander("Notifications"):
+            slack_webhook = st.text_input(
+                "Slack webhook URL",
+                placeholder="https://hooks.slack.com/services/…",
+                help="Paste a Slack incoming webhook URL. An alert fires if HIGH-risk ports are found.",
+                type="password",
+            )
+            discord_webhook = st.text_input(
+                "Discord webhook URL",
+                placeholder="https://discord.com/api/webhooks/…",
+                help="Paste a Discord webhook URL. An alert fires if HIGH-risk ports are found.",
+                type="password",
+            )
+
         st.markdown("---")
         start = st.button(
             "🚀 Start Scan",
@@ -506,6 +549,8 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             jitter=jitter,
             fragment=fragment,
             decoys=decoys,
+            slack_webhook=slack_webhook,
+            discord_webhook=discord_webhook,
         ),
         start,
     )
