@@ -5,6 +5,7 @@ But it's way better than just showing an open port number.
 """
 
 import asyncio
+import ipaddress
 import re
 import subprocess
 import sys
@@ -94,16 +95,28 @@ def guess_os_from_ttl(ttl: int) -> str:
     return "Unknown"
 
 
+def _is_ipv6_address(host: str) -> bool:
+    """True for bare IPv6 addresses like 2001:db8::1 — not hostnames."""
+    try:
+        return isinstance(ipaddress.ip_address(host), ipaddress.IPv6Address)
+    except ValueError:
+        return False
+
+
 def get_ttl_via_ping(host: str, timeout: float = 2.0) -> int | None:
     """Ping the host once and pull the TTL from the output.
 
     Uses subprocess because asyncio doesn't expose the IP TTL from TCP connections.
     Falls back to None on any error — caller handles missing TTL gracefully.
+    For IPv6 hosts, uses ping6 on Linux/macOS or ping -6 on Windows.
     """
+    ipv6 = _is_ipv6_address(host)
     if sys.platform == "win32":
-        cmd = ["ping", "-n", "1", "-w", str(int(timeout * 1000)), host]
+        cmd = ["ping", "-6" if ipv6 else "-4", "-n", "1", "-w", str(int(timeout * 1000)), host]
     else:
-        cmd = ["ping", "-c", "1", "-W", str(int(timeout)), host]
+        # modern Linux/macOS: ping -6 works; older systems need ping6
+        ping_bin = "ping6" if ipv6 else "ping"
+        cmd = [ping_bin, "-c", "1", "-W", str(int(timeout)), host]
 
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 2.0)
@@ -147,7 +160,9 @@ async def grab_http_headers(host: str, port: int, timeout: float = 2.0) -> str |
     We only grab headers we actually care about for fingerprinting.
     """
     scheme = "https" if port in (443, 8443) else "http"
-    url = f"{scheme}://{host}:{port}/"
+    # IPv6 addresses need brackets in URLs: http://[::1]:80/
+    host_part = f"[{host}]" if _is_ipv6_address(host) else host
+    url = f"{scheme}://{host_part}:{port}/"
     fingerprint_headers = {"server", "x-powered-by", "x-aspnet-version", "via", "x-generator"}
 
     try:

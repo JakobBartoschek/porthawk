@@ -109,7 +109,8 @@ def _udp_probe_sync(host: str, port: int, timeout: float) -> PortState:
     On Windows: ConnectionResetError is the ICMP unreachable equivalent.
     No response after timeout = could be open or firewalled, so FILTERED.
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+    family = socket.AF_INET6 if is_ipv6(host) else socket.AF_INET
+    with socket.socket(family, socket.SOCK_DGRAM) as sock:
         sock.settimeout(timeout)
         try:
             sock.sendto(b"\x00", (host, port))  # empty byte triggers ICMP faster than nothing
@@ -151,21 +152,38 @@ async def scan_udp_port(
             ) from exc
 
 
-def expand_cidr(target: str) -> list[str]:
-    """Expand 192.168.1.0/24 into individual host IPs. Single IPs and hostnames pass through.
+def is_ipv6(host: str) -> bool:
+    """True if host is a bare IPv6 address (not a hostname or IPv4).
 
-    strict=False so 192.168.1.5/24 doesn't raise ValueError — it just uses the network.
+    Accepts both bracket notation [::1] and bare form 2001:db8::1.
+    Hostnames always return False — we let the OS resolve them.
     """
+    stripped = host.lstrip("[").rstrip("]")
     try:
-        network = ipaddress.ip_network(target, strict=False)
+        return isinstance(ipaddress.ip_address(stripped), ipaddress.IPv6Address)
+    except ValueError:
+        return False
+
+
+def expand_cidr(target: str) -> list[str]:
+    """Expand 192.168.1.0/24 or 2001:db8::/64 into individual host IPs.
+
+    Single IPs and hostnames pass through unchanged.
+    Strips bracket notation [::1] that users sometimes copy from URLs.
+    strict=False so 192.168.1.5/24 doesn't raise — it just uses the network.
+    """
+    # strip brackets — [2001:db8::1] → 2001:db8::1
+    bare = target.lstrip("[").rstrip("]")
+    try:
+        network = ipaddress.ip_network(bare, strict=False)
         hosts = list(network.hosts())
         if not hosts:
-            # /32 has no "hosts()" — it IS the host
+            # /128 (IPv6) or /32 (IPv4) has no hosts() — it IS the host
             return [str(network.network_address)]
         return [str(ip) for ip in hosts]
     except ValueError:
-        # Not a CIDR block — treat as hostname or bare IP
-        return [target]
+        # Not a CIDR block — hostname or bare IP, return as-is (bare, no brackets)
+        return [bare]
 
 
 def parse_port_range(port_spec: str) -> list[int]:

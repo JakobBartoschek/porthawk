@@ -428,7 +428,7 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         st.subheader("Target")
         target = st.text_input(
             "IP / Hostname / CIDR",
-            placeholder="192.168.1.1  or  10.0.0.0/24",
+            placeholder="192.168.1.1  ·  10.0.0.0/24  ·  2001:db8::1  ·  fe80::/64",
         )
 
         # ports
@@ -997,9 +997,10 @@ def main() -> None:
                 Enter a target in the sidebar and click **Start Scan**.
 
                 **Target formats:**
-                - Single IP — `192.168.1.1`
+                - IPv4 — `192.168.1.1`
+                - IPv6 — `2001:db8::1` or `[::1]`
                 - Hostname — `scanme.nmap.org`
-                - CIDR range — `10.0.0.0/24`
+                - CIDR range — `10.0.0.0/24` or `2001:db8::/64`
 
                 **Scan modes:** TCP, UDP, Stealth, SYN (root), Evasion (root)
 
