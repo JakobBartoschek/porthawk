@@ -5,6 +5,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [1.4.0] — 2026-03-27
+
+### IPv6 support
+
+All scan modes now work with IPv6 targets. Pass a bare address, bracketed address, or CIDR prefix — PortHawk handles it.
+
+**What changed:**
+
+- `scanner.py` — new `is_ipv6(host)` helper detects IPv6 addresses including `[bracket]` notation. `expand_cidr` strips brackets before parsing (so `[2001:db8::1]` works). `_udp_probe_sync` picks `AF_INET6` automatically.
+- `udp_scan.py` — protocol-specific UDP probes also use `AF_INET6` for IPv6 targets.
+- `fingerprint.py` — `grab_http_headers` brackets IPv6 in URLs (`http://[::1]:80/`). `get_ttl_via_ping` uses `ping6` on Linux/macOS and `ping -6` on Windows for IPv6 targets.
+- Dashboard — target field placeholder shows IPv6 examples. Welcome text lists `2001:db8::1`, `[::1]`, and `2001:db8::/64` as valid formats.
+
+**Usage:**
+```bash
+# CLI — works exactly like IPv4
+porthawk scan -t 2001:db8::1 --common --banners
+porthawk scan -t fe80::1%eth0 --common
+porthawk scan -t 2001:db8::/64 --top-ports 100
+
+# bracket notation also accepted (copied from browser URLs)
+porthawk scan -t '[::1]' --common
+```
+
+No new flags, no new dependencies. TCP connect, UDP, banner grabbing, CVE lookup, OS fingerprint — all work over IPv6.
+
+SYN scan and evasion mode over IPv6 depend on Scapy's IPv6 support and are not tested here — those involve raw packet construction that's out of scope for this release.
+
+**25 new tests** in `tests/test_ipv6.py`. Total: 812.
+
+---
+
 ## [1.3.0] — 2026-03-27
 
 ### Slack and Discord webhook alerts

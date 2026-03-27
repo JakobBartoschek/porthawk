@@ -38,6 +38,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 - **IDS/IPS evasion** — "Slow & Low" mode for red-team scenarios: IP fragmentation, exponential timing jitter, decoy source IPs, custom TCP flag combos (FIN, NULL, XMAS, ACK, Maimon)
 - **Passive OS fingerprinting** — TCP/IP stack analysis from SYN-ACK responses: TTL, window size, MSS, TCP options, DF bit. Rule-based scoring + KNN classifier, 16-entry signature database (Windows, Linux, macOS, BSD, network devices). >80% OS family accuracy.
 - **Webhook alerts** — `--slack-webhook` / `--discord-webhook` CLI flags (or env vars) send a message when HIGH-risk ports are found. Dashboard has a Notifications panel for the same. No extra dependencies.
+- **IPv6 support** — pass `2001:db8::1`, `[::1]`, or `2001:db8::/64` as target. TCP, UDP, banner grabbing, CVE lookup, and OS fingerprinting all work over IPv6. Bracket notation is accepted for copy-paste from browser URLs.
 - **Service database** — ~200 common ports with names and descriptions
 - **Risk scoring** — HIGH / MEDIUM / LOW per open port based on real-world exposure risk
 - **Live terminal UI** — progress bar + live-updating open ports table + event log during scan
@@ -553,7 +554,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] Nmap XML import and diff/compare mode — `porthawk diff a.json b.xml`, new/gone/changed detection
 - [x] Web dashboard — Streamlit, `pip install porthawk[dashboard]`, one-click launchers for all platforms
 - [x] Slack and Discord webhook alerts for HIGH-risk open ports — `--slack-webhook`, `--discord-webhook`, env vars, dashboard panel
-- [ ] IPv6 support
+- [x] IPv6 support — TCP/UDP/banners/CVE/OS over IPv6, bracket notation, CIDR prefix expansion
 
 ---
 

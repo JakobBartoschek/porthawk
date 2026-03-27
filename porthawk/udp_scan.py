@@ -28,7 +28,7 @@ import socket
 import struct
 from collections.abc import Callable
 
-from porthawk.scanner import PortState, ScanResult
+from porthawk.scanner import PortState, ScanResult, is_ipv6
 
 # ---------------------------------------------------------------------------
 # Protocol-specific payloads
@@ -369,7 +369,8 @@ def _udp_probe_sync(
     than you'd think, even on LAN. One retry is usually enough.
     """
     for attempt in range(retries + 1):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        family = socket.AF_INET6 if is_ipv6(host) else socket.AF_INET
+        sock = socket.socket(family, socket.SOCK_DGRAM)
         sock.settimeout(timeout)
         try:
             sock.sendto(payload if payload else b"\x00", (host, port))
