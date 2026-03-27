@@ -10,6 +10,7 @@
 ```
 
 [![CI](https://github.com/JakobBartoschek/porthawk/actions/workflows/ci.yml/badge.svg)](https://github.com/JakobBartoschek/porthawk/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/JakobBartoschek/porthawk/branch/main/graph/badge.svg)](https://codecov.io/gh/JakobBartoschek/porthawk)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Authorized Use Only](https://img.shields.io/badge/use-authorized%20targets%20only-red)](DISCLAIMER.md)
@@ -119,6 +120,16 @@ Or from source:
 git clone https://github.com/JakobBartoschek/porthawk
 cd porthawk
 pip install .
+```
+
+**Docker:**
+
+```bash
+docker build -t porthawk .
+docker run --rm porthawk scan -t 192.168.1.1 --common
+
+# SYN scan needs NET_RAW capability
+docker run --rm --cap-add=NET_RAW porthawk scan -t 192.168.1.1 --common --syn
 ```
 
 ---
