@@ -205,7 +205,7 @@ class TestGrabHttpHeaders:
 class TestGetTtlViaPing:
     def test_successful_ping_extracts_ttl(self):
         mock_result = MagicMock()
-        mock_result.stdout = "Pinging 192.168.1.1 with 32 bytes of data:\nReply from 192.168.1.1: bytes=32 time=1ms TTL=128"
+        mock_result.stdout = b"Pinging 192.168.1.1 with 32 bytes of data:\nReply from 192.168.1.1: bytes=32 time=1ms TTL=128"
 
         with patch("subprocess.run", return_value=mock_result):
             ttl = get_ttl_via_ping("192.168.1.1")
@@ -221,7 +221,7 @@ class TestGetTtlViaPing:
 
     def test_no_ttl_in_output_returns_none(self):
         mock_result = MagicMock()
-        mock_result.stdout = "Request timed out."
+        mock_result.stdout = b"Request timed out."
 
         with patch("subprocess.run", return_value=mock_result):
             ttl = get_ttl_via_ping("192.168.1.1")
