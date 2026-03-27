@@ -418,6 +418,8 @@ Full API reference: [`docs/api.md`](docs/api.md)
 
 ## GitHub Action
 
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-PortHawk%20Security%20Scan-blue?logo=github)](https://github.com/marketplace/actions/porthawk-security-scan)
+
 Run PortHawk in any GitHub Actions workflow. Open ports appear in the **Security tab** as code scanning alerts.
 
 ```yaml
@@ -439,14 +441,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Scan staging server
-        uses: jakobbartoschek/porthawk@v0.9.0
+        uses: jakobbartoschek/porthawk@v1.4.0
         with:
           target: ${{ secrets.STAGING_HOST }}
           ports: common
           fail-on-ports: '21,23,3389'   # fail if FTP, Telnet, or RDP is open
 
       - name: Scan with UDP
-        uses: jakobbartoschek/porthawk@v0.9.0
+        uses: jakobbartoschek/porthawk@v1.4.0
         with:
           target: ${{ secrets.STAGING_HOST }}
           scan-mode: udp
