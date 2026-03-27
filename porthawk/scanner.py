@@ -170,8 +170,13 @@ def expand_cidr(target: str) -> list[str]:
 
     Single IPs and hostnames pass through unchanged.
     Strips bracket notation [::1] that users sometimes copy from URLs.
+    Strips leading/trailing whitespace — copy-paste from terminals often adds spaces.
     strict=False so 192.168.1.5/24 doesn't raise — it just uses the network.
+    Returns [] for empty input so callers can validate before scanning.
     """
+    target = target.strip()
+    if not target:
+        return []
     # strip brackets — [2001:db8::1] → 2001:db8::1
     bare = target.lstrip("[").rstrip("]")
     try:
