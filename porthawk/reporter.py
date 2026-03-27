@@ -340,6 +340,12 @@ def print_terminal(report: ScanReport, show_closed: bool = False, show_cves: boo
         f"{report.metadata.total_ports} scanned[/dim]"
     )
 
+    # print OS guess if --os was used — same TTL for all ports on a host, so one line is enough
+    os_result = next((r for r in display_results if r.os_guess is not None), None)
+    if os_result is not None:
+        ttl_str = f" (TTL={os_result.ttl})" if os_result.ttl is not None else ""
+        console.print(f"  [dim]OS guess: [cyan]{os_result.os_guess}[/cyan]{ttl_str}[/dim]")
+
 
 def save_json(report: ScanReport, output_path: Path | None = None) -> Path:
     """Dump the full ScanReport as pretty-printed JSON.
