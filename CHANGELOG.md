@@ -5,6 +5,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [1.3.0] — 2026-03-27
+
+### Slack and Discord webhook alerts
+
+PortHawk can now ping a Slack or Discord channel when HIGH-risk ports are found.
+Zero extra dependencies — uses `urllib.request` under the hood.
+
+**CLI flags:**
+```bash
+porthawk scan -t 10.0.0.1 --common --banners \
+  --slack-webhook https://hooks.slack.com/services/…
+  --discord-webhook https://discord.com/api/webhooks/…
+```
+
+Or set env vars so you don't have to pass the URL every time:
+```bash
+export PORTHAWK_SLACK_WEBHOOK=https://hooks.slack.com/services/…
+export PORTHAWK_DISCORD_WEBHOOK=https://discord.com/api/webhooks/…
+porthawk scan -t 10.0.0.1 --common
+```
+
+**What gets sent:**
+Only open ports rated HIGH get reported — one message per scan, listing port/service/version and CVE count if available. Nothing fires on LOW or MEDIUM.
+
+**Dashboard:**
+A *Notifications* expander in the sidebar lets you paste webhook URLs (masked input). Alerts fire automatically when the scan worker finishes.
+
+**New module: `porthawk/notify.py`**
+- `send_slack(webhook_url, results, target)` → int
+- `send_discord(webhook_url, results, target)` → int
+- `_high_risk_ports(results)` — filter helper
+- `_slack_payload()` / `_discord_payload()` — pure formatting, no I/O
+
+**29 new tests** in `tests/test_notify.py`. Total: 787.
+
+---
+
 ## [1.2.0] — 2026-03-27
 
 ### Dashboard: full feature parity with CLI
