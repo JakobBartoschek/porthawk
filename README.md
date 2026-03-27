@@ -251,7 +251,19 @@ python start_dashboard.py
 # or: porthawk-dashboard
 ```
 
-Opens at `http://localhost:8501` in your browser. Enter a target in the sidebar, hit **Start Scan**, results appear in the Results tab. Charts and the network graph fill in automatically. The Diff tab lets you upload two scan files and compare them.
+Opens at `http://localhost:8501`. Enter a target in the sidebar, hit **Start Scan**, results appear in the Results tab.
+
+**What you can do in the dashboard (full CLI parity):**
+
+- **5 scan modes** — TCP, UDP, Stealth, SYN (root), Evasion (root)
+- **Evasion settings** — TCP flag type (SYN/FIN/NULL/XMAS/ACK/Maimon), jitter, packet fragmentation, decoy IPs
+- **Enrichment** — banners, OS detection, CVE lookup, adaptive speed, honeypot detection, passive OS fingerprinting
+- **Smart port order** — ML-based reordering puts likely-open ports first
+- **Results tab** — OS banner, honeypot badge, per-port CVE expanders, TTL column
+- **Charts tab** — risk distribution, top services, host×risk heatmap, latency chart
+- **Graph tab** — PyVis network graph (`pip install pyvis`), color-coded by risk
+- **Diff tab** — compare two scan files (PortHawk JSON or Nmap XML)
+- **Export tab** — download JSON, CSV, HTML, or SARIF report
 
 **Disable the live UI (for scripts, pipes, CI):**
 ```bash

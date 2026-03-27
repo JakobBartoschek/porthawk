@@ -5,6 +5,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [1.2.0] — 2026-03-27
+
+### Dashboard: full feature parity with CLI
+
+The dashboard now exposes every scan mode and enrichment option that the CLI offers.
+No more "basic TCP only" — you get the full toolkit in the browser.
+
+**5 scan modes in the sidebar:**
+
+- **TCP** — standard async connect, fast, no root needed
+- **UDP** — protocol-specific payloads (DNS, NTP, SNMP, SSDP, …), top UDP ports by default
+- **Stealth** — single-thread, 3 s timeout, leaves less noise in target logs
+- **SYN (root)** — half-open SYN scan via Scapy or Linux raw sockets (needs root/admin)
+- **Evasion (root)** — randomized timing, packet fragmentation, custom TCP flags, decoy IPs (needs root/admin)
+
+**Evasion sub-panel** (shown only in Evasion mode):
+- TCP flag type: SYN, FIN, NULL, XMAS, ACK, Maimon
+- Jitter slider (0–30 s)
+- Fragment packets toggle
+- Decoy IP list input
+
+**Enrichment checkboxes:**
+- Banners, OS detect, CVE lookup (existing)
+- Adaptive scan speed (AIMD throttle)
+- Smart port order (ML-based frequency reordering)
+- Honeypot detection (Cowrie, Dionaea, T-Pot, Conpot)
+- Passive OS fingerprinting (TTL + TCP stack)
+
+**Results tab improvements:**
+- Passive OS banner at top (confidence color-coded: green/yellow/red)
+- Honeypot badge (🪤 likely honeypot / ⚠️ suspicious / ✅ likely real)
+- TTL column in results table
+- CVE expanders per port (up to 10 CVEs each)
+
+**Charts tab:**
+- Latency bar chart added (shown when ≥3 ports have latency data)
+
+**Export tab:**
+- SARIF download added (for GitHub Security tab integration)
+
+**6 new tests** in `tests/test_dashboard.py` for `honeypot_badge()` and TTL field. Total: 758 tests.
+
+---
+
 ## [1.1.0] — 2026-03-27
 
 ### Web dashboard
