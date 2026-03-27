@@ -227,7 +227,7 @@ class TestPingIpv6:
         def fake_run(cmd, **kwargs):
             captured_cmds.append(cmd)
             m = MagicMock()
-            m.stdout = "ttl=64"
+            m.stdout = b"ttl=64"
             return m
 
         with patch("sys.platform", "linux"), patch("subprocess.run", fake_run):
@@ -242,7 +242,7 @@ class TestPingIpv6:
         def fake_run(cmd, **kwargs):
             captured_cmds.append(cmd)
             m = MagicMock()
-            m.stdout = "ttl=64"
+            m.stdout = b"ttl=64"
             return m
 
         with patch("sys.platform", "linux"), patch("subprocess.run", fake_run):
@@ -256,7 +256,7 @@ class TestPingIpv6:
         def fake_run(cmd, **kwargs):
             captured_cmds.append(cmd)
             m = MagicMock()
-            m.stdout = "TTL=64"
+            m.stdout = b"TTL=64"
             return m
 
         with patch("sys.platform", "win32"), patch("subprocess.run", fake_run):
@@ -270,7 +270,7 @@ class TestPingIpv6:
         def fake_run(cmd, **kwargs):
             captured_cmds.append(cmd)
             m = MagicMock()
-            m.stdout = "TTL=64"
+            m.stdout = b"TTL=64"
             return m
 
         with patch("sys.platform", "win32"), patch("subprocess.run", fake_run):
