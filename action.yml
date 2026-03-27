@@ -1,5 +1,5 @@
 name: 'PortHawk Security Scan'
-description: 'Async port scanner — finds open ports, grades risk, uploads SARIF to GitHub Security tab'
+description: 'Async port scanner: open ports → risk rating → SARIF in Security tab. No nmap, pure Python.'
 author: 'Jakob Bartoschek'
 
 branding:
