@@ -52,11 +52,13 @@ EVASION_TYPES = ["syn", "fin", "null", "xmas", "ack", "maimon"]
 # ---------------------------------------------------------------------------
 
 
-def results_to_rows(results: list[ScanResult]) -> list[dict[str, Any]]:
-    """Convert open ScanResults to plain dicts for st.dataframe."""
+def results_to_rows(
+    results: list[ScanResult], include_closed: bool = False
+) -> list[dict[str, Any]]:
+    """Convert ScanResults to plain dicts for st.dataframe."""
     rows = []
     for r in results:
-        if r.state != PortState.OPEN:
+        if r.state != PortState.OPEN and not include_closed:
             continue
         risk = r.risk_level or "—"
         rows.append(
@@ -120,6 +122,9 @@ def _init_state() -> None:
         "report": None,
         "honeypot_report": None,
         "passive_os_result": None,
+        "dash_timeout": 1.0,
+        "dash_threads": 500,
+        "dash_include_closed": False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -430,7 +435,9 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             use_container_width=True,
             help="Common ports, 0.5 s timeout, no enrichment — results in ~3 s",
         ):
-            st.session_state["qs_preset"] = True
+            st.session_state["dash_timeout"] = 0.5
+            st.session_state["dash_threads"] = 300
+            st.rerun()
 
         st.markdown("---")
 
@@ -440,9 +447,6 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             "IP / Hostname / CIDR",
             placeholder="192.168.1.1  ·  10.0.0.0/24  ·  2001:db8::1  ·  fe80::/64",
         )
-
-        # preset shortcut — applied once, then cleared so it doesn't re-trigger
-        _qs = st.session_state.pop("qs_preset", False)
 
         # ports
         st.subheader("Ports")
@@ -515,7 +519,9 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
                 help="Score the target for honeypot likelihood after scan",
             )
             include_closed = st.checkbox(
-                "Show closed", value=False, help="Include closed/filtered ports in results"
+                "Show closed",
+                key="dash_include_closed",
+                help="Include closed/filtered ports in results",
             )
 
         # advanced settings — preset forces safe fast defaults
@@ -530,9 +536,8 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
                 value=False,
                 help="AIMD concurrency control: starts conservative, ramps up on stable networks",
             )
-            # quick-preset overrides: 0.5 s timeout, 300 threads — enough for remote hosts
-            timeout = st.slider("Timeout per port (s)", 0.1, 10.0, 0.5 if _qs else 1.0, 0.1)
-            threads = st.slider("Concurrency", 10, 1000, 300 if _qs else 500, 10)
+            timeout = st.slider("Timeout per port (s)", 0.1, 10.0, 1.0, 0.1, key="dash_timeout")
+            threads = st.slider("Concurrency", 10, 1000, 500, 10, key="dash_threads")
 
         with st.expander("Notifications"):
             slack_webhook = st.text_input(
@@ -623,7 +628,8 @@ def render_results_tab(results: list[ScanResult]) -> None:
         return
 
     # main results table
-    rows = results_to_rows(results)
+    include_closed = st.session_state.get("dash_include_closed", False)
+    rows = results_to_rows(results, include_closed=include_closed)
     try:
         import pandas as pd
 
@@ -965,6 +971,7 @@ def render_export_tab() -> None:
     st.subheader("Download scan reports")
 
     c1, c2, c3, c4 = st.columns(4)
+    json_path = None
     for col, (label, mime, save_fn) in zip(
         [c1, c2, c3, c4],
         [
@@ -976,12 +983,14 @@ def render_export_tab() -> None:
         strict=False,
     ):
         p = save_fn(report)
+        if json_path is None:
+            json_path = p
         col.download_button(
             label, data=p.read_bytes(), file_name=p.name, mime=mime, use_container_width=True
         )
 
-    p = save_json(report)
-    st.caption(f"Files also saved to: `{p.parent}`")
+    if json_path:
+        st.caption(f"Files also saved to: `{json_path.parent}`")
 
 
 # ---------------------------------------------------------------------------

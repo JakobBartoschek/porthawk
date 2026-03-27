@@ -119,8 +119,12 @@ def get_ttl_via_ping(host: str, timeout: float = 2.0) -> int | None:
         cmd = [ping_bin, "-c", "1", "-W", str(int(timeout)), host]
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 2.0)
-        ttl_match = re.search(r"ttl=(\d+)", proc.stdout, re.IGNORECASE)
+        proc = subprocess.run(cmd, capture_output=True, timeout=timeout + 2.0)
+        # decode manually with errors='ignore' — Windows ping output uses the system
+        # ANSI codepage which can contain bytes that aren't valid UTF-8 or cp1252.
+        # TTL is always ASCII so ignoring undecodable bytes is safe here.
+        output = proc.stdout.decode("utf-8", errors="ignore")
+        ttl_match = re.search(r"ttl=(\d+)", output, re.IGNORECASE)
         return int(ttl_match.group(1)) if ttl_match else None
     except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError, FileNotFoundError):
         return None
