@@ -5,6 +5,55 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [1.1.0] — 2026-03-27
+
+### Web dashboard
+
+PortHawk now has a browser UI. No CLI knowledge required — enter a target, click Start, read the results.
+
+**Install and launch:**
+```bash
+pip install porthawk[dashboard]
+python start_dashboard.py        # all platforms
+./start_dashboard.sh             # macOS/Linux
+start_dashboard.bat              # Windows (double-click)
+porthawk-dashboard               # CLI entry point after pip install
+```
+
+Opens at `http://localhost:8501`.
+
+**New module: `porthawk/dashboard.py`**
+
+Streamlit app with 5 tabs:
+
+- **Results** — sortable table with risk emoji, service, banner, OS guess, CVE count, latency
+- **Charts** — Altair risk-distribution bar chart, top-services horizontal bar, host×risk heatmap for CIDR scans
+- **Graph** — PyVis network graph (`pip install pyvis`): scanner → hosts → open ports, color-coded by risk. Optional — silently skipped if PyVis not installed.
+- **Diff** — upload two scan files (PortHawk JSON or Nmap XML), compare them visually, new/gone/changed shown as tables
+- **Export** — download JSON, CSV, or HTML report after scan completes
+
+**Sidebar settings:**
+- Target: IP, hostname, or CIDR
+- Port mode: Common (100), Top 1000 (by frequency), Full (65535), Custom range/list
+- Options: banners, OS detect, CVE lookup, UDP scan, show closed ports
+- Advanced: timeout slider, concurrency slider
+
+**Background scanning:**
+Scan runs in a daemon thread so the UI stays responsive. Session state is polled every second while the scan is running.
+
+**New launcher scripts:**
+- `start_dashboard.py` — Python launcher, works everywhere
+- `start_dashboard.bat` — Windows double-click launcher
+- `start_dashboard.sh` — macOS/Linux launcher
+
+**Updated `pyproject.toml`:**
+- `[dashboard]` optional dependency group: `streamlit>=1.28`, `altair>=5.0`, `pandas>=2.0`
+- `porthawk-dashboard` CLI entry point
+
+**25 new tests** in `tests/test_dashboard.py` — pure helper function coverage (results_to_rows, risk_distribution, service_distribution). Total: 752 tests.
+
+---
+
 ## [1.0.0] — 2026-03-27
 
 ### Nmap XML import + scan diff

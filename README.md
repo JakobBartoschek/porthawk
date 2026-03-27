@@ -22,6 +22,7 @@ live terminal UI, JSON, CSV, or a self-contained HTML report. No nmap, no extern
 
 ## Features
 
+- **Web dashboard** — Streamlit UI for non-technical users. Sidebar settings, live scan, Altair charts, PyVis network graph, diff view, one-click report download. No CLI needed. (`pip install porthawk[dashboard]`, then `python start_dashboard.py`)
 - **Async TCP scanning** via `asyncio` — 500 concurrent connections by default, configurable
 - **UDP scanning** — protocol-specific payloads for DNS, NTP, SNMP, SSDP, NetBIOS, mDNS, IKE, TFTP. Validates responses, extracts banners. ICMP unreachable detection for closed ports. Defaults to top 20 UDP ports.
 - **Nmap XML import + diff** — load any Nmap `-oX` output and compare two scans to see what changed: new open ports, gone services, version upgrades. Works with PortHawk JSON too.
@@ -237,6 +238,20 @@ print(f"New open ports: {len(diff.new_ports)}")
 for change in diff.new_ports:
     print(change.describe())
 ```
+
+**Web dashboard — no CLI needed, works on Windows/macOS/Linux:**
+```bash
+pip install porthawk[dashboard]
+
+# Windows — double-click start_dashboard.bat, or:
+python start_dashboard.py
+
+# macOS / Linux:
+./start_dashboard.sh
+# or: porthawk-dashboard
+```
+
+Opens at `http://localhost:8501` in your browser. Enter a target in the sidebar, hit **Start Scan**, results appear in the Results tab. Charts and the network graph fill in automatically. The Diff tab lets you upload two scan files and compare them.
 
 **Disable the live UI (for scripts, pipes, CI):**
 ```bash
@@ -510,7 +525,7 @@ All network calls are mocked — tests run without any real connections.
 - [x] UDP scanning — protocol-specific payloads, ICMP unreachable detection, 8 protocols
 - [x] GitHub Action — `uses: jakobbartoschek/porthawk@v1.0.0`, SARIF to Security tab, artifact upload
 - [x] Nmap XML import and diff/compare mode — `porthawk diff a.json b.xml`, new/gone/changed detection
-- [ ] Web dashboard with Flask
+- [x] Web dashboard — Streamlit, `pip install porthawk[dashboard]`, one-click launchers for all platforms
 - [ ] Slack and Discord webhook alerts for HIGH-risk open ports
 - [ ] IPv6 support
 
