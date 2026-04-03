@@ -10,6 +10,7 @@ import asyncio
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -180,6 +181,7 @@ async def _run_scan_async(
     targets: list[str],
     port_list: list[int],
     opts: ScanOptions,
+    on_result: Callable[[ScanResult], None] | None = None,
 ) -> list[ScanResult]:
     """Route to the right scan backend based on scan_mode."""
     if opts.scan_mode == "SYN (root)":
@@ -246,6 +248,7 @@ async def _run_scan_async(
         max_concurrent=threads,
         udp=False,
         show_progress=False,
+        on_result=on_result,
         adaptive_config=adaptive_cfg,
     )
     return [r for host_results in all_dicts.values() for r in host_results]
@@ -336,8 +339,9 @@ def _scan_worker(target: str, opts: ScanOptions, out: dict[str, Any]) -> None:
     inside session_state. Never touches st.session_state directly because
     session_state writes from background threads are unreliable in Streamlit."""
     try:
+        from porthawk.scanner import PortState as _PS
         from porthawk.scanner import expand_cidr, parse_port_range
-        from porthawk.service_db import get_top_ports
+        from porthawk.service_db import get_service, get_top_ports
 
         targets = expand_cidr(target)
         if not targets:
@@ -362,7 +366,20 @@ def _scan_worker(target: str, opts: ScanOptions, out: dict[str, Any]) -> None:
             except ImportError:
                 pass  # scikit-learn not installed, just continue
 
-        results = asyncio.run(_run_scan_async(targets, port_list, opts))
+        out["total_ports"] = len(port_list) * len(targets)
+        out["scanned_count"] = 0
+        out["live_open"] = []  # grows as open ports are found
+
+        # callback fires for each port the instant it's probed (TCP/Stealth only)
+        def _on_result(r: ScanResult) -> None:
+            out["scanned_count"] += 1
+            if r.state == _PS.OPEN:
+                svc = get_service(r.port, r.protocol)
+                r.service_name = svc.service_name
+                r.risk_level = svc.risk_level.value if svc.risk_level else None
+                out["live_open"].append(r)
+
+        results = asyncio.run(_run_scan_async(targets, port_list, opts, on_result=_on_result))
         results = _enrich_results(results, targets, opts)
 
         if opts.cve_lookup:
@@ -1071,12 +1088,12 @@ def main() -> None:
         _start_scan(target, opts)
         st.rerun()
 
-    # poll every second while scan is running
+    # poll while scan is running — shows live results as they arrive
     if st.session_state["scan_running"]:
         elapsed = int(time.time() - st.session_state["scan_start"])
         out: dict[str, Any] = st.session_state.get("_scan_out", {})
 
-        # check if the background thread has finished writing results
+        # thread finished — pull everything into session_state from main thread
         if out.get("done"):
             st.session_state["scan_results"] = out.get("results", [])
             st.session_state["scan_error"] = out.get("error")
@@ -1086,27 +1103,49 @@ def main() -> None:
             st.session_state["scan_running"] = False
             st.rerun()
 
-        # safety valve: 5 min timeout in case the thread died silently
+        # safety valve — 5 min cap in case the daemon thread died silently
         if elapsed > 300:
             st.session_state["scan_running"] = False
-            st.session_state["scan_error"] = "Scan timed out — the background thread may have died."
+            st.session_state["scan_error"] = "Scan timed out — background thread may have died."
             st.rerun()
+
+        scan_target = st.session_state["scan_target"]
+        total = out.get("total_ports", 0)
+        scanned = out.get("scanned_count", 0)
+        live_open: list[ScanResult] = list(out.get("live_open", []))
 
         mins, secs = divmod(elapsed, 60)
         time_str = f"{mins}m {secs:02d}s" if mins else f"{secs}s"
-        scan_target = st.session_state["scan_target"]
-        st.info(f"⏳ Scanning **{scan_target}** — {time_str} elapsed")
 
-        with st.expander("Scan details", expanded=True):
-            started_at = time.strftime("%H:%M:%S", time.localtime(st.session_state["scan_start"]))
-            st.caption(f"Target: `{scan_target}`")
-            st.caption(f"Started: {started_at}")
-            st.caption(
-                "Scanning in background — results appear when the scan finishes. "
-                "No partial display. Use Quick Scan preset for fast results."
+        if total:
+            pct = int(100 * scanned / total)
+            st.info(
+                f"⏳ Scanning **{scan_target}** — {scanned}/{total} ports ({pct}%) "
+                f"— **{len(live_open)} open** — {time_str} elapsed"
             )
+            st.progress(pct / 100)
+        else:
+            st.info(f"⏳ Scanning **{scan_target}** — {time_str} elapsed")
 
-        time.sleep(1.0)
+        # live table — updates every 0.5 s as open ports arrive
+        if live_open:
+            st.markdown("**Open ports found so far — scan still running…**")
+            try:
+                import pandas as pd
+
+                rows = results_to_rows(live_open)
+                st.dataframe(
+                    pd.DataFrame(rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            except ImportError:
+                for r in live_open:
+                    st.text(f"  {r.port}/{r.protocol}  {r.service_name or '—'}")
+        else:
+            st.caption("No open ports yet — still scanning…")
+
+        time.sleep(0.5)
         st.rerun()
 
     if st.session_state["scan_error"]:
