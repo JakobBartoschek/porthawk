@@ -5,6 +5,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ---
 
+## [1.5.0] — 2026-04-03
+
+### Dashboard: live scan results and Quick Scan fix
+
+The web dashboard got a proper overhaul focused on demo usability.
+
+**Quick Scan preset — actually works now:**
+
+Three bugs fixed in sequence:
+- Preset only updated UI labels but didn't reset scan mode or enrichment checkboxes (CVE lookup, banners etc.) — so a slow enrichment setting from before would silently override the preset's speed.
+- After fixing that, the button click triggered a two-rerun cycle via an `auto_start` flag that could silently fail in Streamlit 1.55.0.
+- Root cause: `st.session_state` writes from background threads are unreliable in Streamlit — the scan completed fine but results never reached the UI. Fixed by writing results into a plain Python dict (`out`) stored as an object reference in session state, then copying from the main thread.
+
+**What the button does now:** enter a target IP, click `⚡ Quick Scan — Start!` (label changes when a target is set), scan starts immediately. No second click. No waiting.
+
+**Live results during scan:**
+
+Open ports now appear in a live table the moment they're found, with a progress bar showing `X/Y ports (N%) — Z open`. Uses the existing `on_result` callback in `scan_targets` via `asyncio.as_completed`. Works for Quick Scan and regular Start Scan alike.
+
+Polling interval dropped from 1.0 s to 0.5 s.
+
+**Usage (unchanged):**
+```bash
+pip install porthawk[dashboard]
+python start_dashboard.py
+```
+
+Open `http://localhost:8501`, type a target, click `⚡ Quick Scan — Start!`.
+
+---
+
 ## [1.4.0] — 2026-03-27
 
 ### IPv6 support

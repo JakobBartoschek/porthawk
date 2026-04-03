@@ -38,7 +38,7 @@ from porthawk.syn_scan import get_syn_backend, syn_scan_host
 from porthawk.throttle import AdaptiveConfig, AdaptiveSemaphore, NetworkStats
 from porthawk.udp_scan import get_udp_top_ports, udp_scan_host
 
-__version__ = "1.0.0"
+__version__ = "1.5.0"
 __author__ = "Jakob Bartoschek"
 __license__ = "MIT"
 

@@ -143,4 +143,4 @@ def test_public_api_exports():
 
 
 def test_version_accessible():
-    assert porthawk.__version__ == "1.0.0"
+    assert porthawk.__version__ == "1.5.0"

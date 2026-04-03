@@ -264,10 +264,12 @@ python start_dashboard.py
 # or: porthawk-dashboard
 ```
 
-Opens at `http://localhost:8501`. Enter a target in the sidebar, hit **Start Scan**, results appear in the Results tab.
+Opens at `http://localhost:8501`. Enter a target, click **⚡ Quick Scan — Start!** and results appear within seconds. Open ports show up in the table as they're found — no waiting for the full scan to finish.
 
 **What you can do in the dashboard (full CLI parity):**
 
+- **⚡ Quick Scan preset** — one click sets common ports, 0.5 s timeout, 300 threads, all enrichment off. If a target is already entered, the scan starts immediately. No second click needed.
+- **Live results** — open ports appear in the table the moment they're found, with a progress bar showing X/Y ports checked. Works for all scan durations.
 - **5 scan modes** — TCP, UDP, Stealth, SYN (root), Evasion (root)
 - **Evasion settings** — TCP flag type (SYN/FIN/NULL/XMAS/ACK/Maimon), jitter, packet fragmentation, decoy IPs
 - **Enrichment** — banners, OS detection, CVE lookup, adaptive speed, honeypot detection, passive OS fingerprinting
