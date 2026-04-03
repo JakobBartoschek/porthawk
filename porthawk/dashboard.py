@@ -136,7 +136,6 @@ def _init_state() -> None:
         "dash_adaptive": False,
         "dash_target": "",
         "preset_active": False,
-        "auto_start": False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -444,10 +443,13 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         st.markdown("---")
 
         # quick-scan preset — one click fills in sensible fast defaults
+        # if a target is already set, the scan starts immediately (no second click needed)
+        _preset_target = st.session_state.get("dash_target", "").strip()
+        _preset_label = "⚡ Quick Scan — Start!" if _preset_target else "⚡ Quick Scan preset"
         if st.button(
-            "⚡ Quick Scan preset",
+            _preset_label,
             use_container_width=True,
-            help="Common ports, 0.5 s timeout, no enrichment — results in ~3 s",
+            help="Common ports, 0.5 s timeout, no enrichment — starts scan immediately if target is set",
         ):
             st.session_state["dash_timeout"] = 0.5
             st.session_state["dash_threads"] = 300
@@ -461,9 +463,25 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             st.session_state["dash_smart_order"] = False
             st.session_state["dash_adaptive"] = False
             st.session_state["preset_active"] = True
-            # if a target is already entered, skip the "now click Start Scan" step
-            if st.session_state.get("dash_target", "").strip():
-                st.session_state["auto_start"] = True
+            # start scan directly — no second click, no extra rerun cycle
+            if _preset_target and not st.session_state.get("scan_running", False):
+                from porthawk.service_db import get_top_ports as _gtp
+
+                _preset_opts = ScanOptions(
+                    ports=_gtp(100),
+                    scan_mode="TCP",
+                    timeout=0.5,
+                    threads=300,
+                    banners=False,
+                    os_detect=False,
+                    cve_lookup=False,
+                    include_closed=False,
+                    smart_order=False,
+                    adaptive=False,
+                    honeypot=False,
+                    passive_os=False,
+                )
+                _start_scan(_preset_target, _preset_opts)
             st.rerun()
 
         if st.session_state.get("preset_active"):
@@ -1043,12 +1061,6 @@ def render_export_tab() -> None:
 
 def main() -> None:
     target, opts, start_clicked = render_sidebar()
-
-    auto_start = st.session_state.get("auto_start", False)
-    if auto_start and target and not st.session_state["scan_running"]:
-        st.session_state["auto_start"] = False
-        _start_scan(target, opts)
-        st.rerun()
 
     if start_clicked and target and not st.session_state["scan_running"]:
         _start_scan(target, opts)
