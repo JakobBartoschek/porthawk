@@ -134,7 +134,9 @@ def _init_state() -> None:
         "dash_honeypot": False,
         "dash_smart_order": False,
         "dash_adaptive": False,
+        "dash_target": "",
         "preset_active": False,
+        "auto_start": False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -459,6 +461,9 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             st.session_state["dash_smart_order"] = False
             st.session_state["dash_adaptive"] = False
             st.session_state["preset_active"] = True
+            # if a target is already entered, skip the "now click Start Scan" step
+            if st.session_state.get("dash_target", "").strip():
+                st.session_state["auto_start"] = True
             st.rerun()
 
         if st.session_state.get("preset_active"):
@@ -471,6 +476,7 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         target = st.text_input(
             "IP / Hostname / CIDR",
             placeholder="192.168.1.1  ·  10.0.0.0/24  ·  2001:db8::1  ·  fe80::/64",
+            key="dash_target",
         )
 
         # ports
@@ -1037,6 +1043,12 @@ def render_export_tab() -> None:
 
 def main() -> None:
     target, opts, start_clicked = render_sidebar()
+
+    auto_start = st.session_state.get("auto_start", False)
+    if auto_start and target and not st.session_state["scan_running"]:
+        st.session_state["auto_start"] = False
+        _start_scan(target, opts)
+        st.rerun()
 
     if start_clicked and target and not st.session_state["scan_running"]:
         _start_scan(target, opts)
