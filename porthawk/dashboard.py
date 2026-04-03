@@ -331,8 +331,10 @@ def _fire_webhooks(results: list[ScanResult], target: str, opts: ScanOptions) ->
 # ---------------------------------------------------------------------------
 
 
-def _scan_worker(target: str, opts: ScanOptions) -> None:
-    """Runs in a daemon thread. Writes into session_state when done."""
+def _scan_worker(target: str, opts: ScanOptions, out: dict[str, Any]) -> None:
+    """Runs in a daemon thread. Writes results into *out* — a plain dict stored
+    inside session_state. Never touches st.session_state directly because
+    session_state writes from background threads are unreliable in Streamlit."""
     try:
         from porthawk.scanner import expand_cidr, parse_port_range
         from porthawk.service_db import get_top_ports
@@ -397,25 +399,27 @@ def _scan_worker(target: str, opts: ScanOptions) -> None:
             max_concurrent=effective_threads,
         )
 
-        # fire webhooks before writing session state so errors don't silence the alert
         _fire_webhooks(results, target, opts)
 
-        st.session_state["scan_results"] = results
-        st.session_state["honeypot_report"] = honeypot_report
-        st.session_state["passive_os_result"] = passive_os_result
-        st.session_state["report"] = report
-        st.session_state["scan_error"] = None
+        out["results"] = results
+        out["honeypot_report"] = honeypot_report
+        out["passive_os_result"] = passive_os_result
+        out["report"] = report
+        out["error"] = None
 
     except Exception as exc:
-        st.session_state["scan_results"] = []
-        st.session_state["scan_error"] = str(exc)
-        st.session_state["honeypot_report"] = None
-        st.session_state["passive_os_result"] = None
+        out["results"] = []
+        out["error"] = str(exc)
+        out["honeypot_report"] = None
+        out["passive_os_result"] = None
     finally:
-        st.session_state["scan_running"] = False
+        # setting done=True is the signal the main thread polls for
+        out["done"] = True
 
 
 def _start_scan(target: str, opts: ScanOptions) -> None:
+    # plain dict — safe to mutate from a background thread
+    out: dict[str, Any] = {"done": False}
     st.session_state.update(
         {
             "scan_running": True,
@@ -426,9 +430,10 @@ def _start_scan(target: str, opts: ScanOptions) -> None:
             "report": None,
             "honeypot_report": None,
             "passive_os_result": None,
+            "_scan_out": out,
         }
     )
-    threading.Thread(target=_scan_worker, args=(target, opts), daemon=True).start()
+    threading.Thread(target=_scan_worker, args=(target, opts, out), daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -1069,9 +1074,19 @@ def main() -> None:
     # poll every second while scan is running
     if st.session_state["scan_running"]:
         elapsed = int(time.time() - st.session_state["scan_start"])
+        out: dict[str, Any] = st.session_state.get("_scan_out", {})
 
-        # safety valve: if the thread died without clearing scan_running (e.g. page reload
-        # killed the daemon thread), the flag stays True forever. After 5 min we give up.
+        # check if the background thread has finished writing results
+        if out.get("done"):
+            st.session_state["scan_results"] = out.get("results", [])
+            st.session_state["scan_error"] = out.get("error")
+            st.session_state["honeypot_report"] = out.get("honeypot_report")
+            st.session_state["passive_os_result"] = out.get("passive_os_result")
+            st.session_state["report"] = out.get("report")
+            st.session_state["scan_running"] = False
+            st.rerun()
+
+        # safety valve: 5 min timeout in case the thread died silently
         if elapsed > 300:
             st.session_state["scan_running"] = False
             st.session_state["scan_error"] = "Scan timed out — the background thread may have died."
@@ -1087,8 +1102,8 @@ def main() -> None:
             st.caption(f"Target: `{scan_target}`")
             st.caption(f"Started: {started_at}")
             st.caption(
-                "Scanning in background — results appear all at once when the scan finishes. "
-                "No partial display. Use Quick Scan preset or fewer ports for faster results."
+                "Scanning in background — results appear when the scan finishes. "
+                "No partial display. Use Quick Scan preset for fast results."
             )
 
         time.sleep(1.0)
