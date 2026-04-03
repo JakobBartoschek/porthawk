@@ -126,6 +126,14 @@ def _init_state() -> None:
         "dash_threads": 500,
         "dash_include_closed": False,
         "dash_port_mode": "Common (100)",
+        "dash_scan_mode": "TCP",
+        "dash_banners": False,
+        "dash_os_detect": False,
+        "dash_passive_os": False,
+        "dash_cve_lookup": False,
+        "dash_honeypot": False,
+        "dash_smart_order": False,
+        "dash_adaptive": False,
         "preset_active": False,
     }
     for key, val in defaults.items():
@@ -442,6 +450,14 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
             st.session_state["dash_timeout"] = 0.5
             st.session_state["dash_threads"] = 300
             st.session_state["dash_port_mode"] = "Common (100)"
+            st.session_state["dash_scan_mode"] = "TCP"
+            st.session_state["dash_banners"] = False
+            st.session_state["dash_os_detect"] = False
+            st.session_state["dash_passive_os"] = False
+            st.session_state["dash_cve_lookup"] = False
+            st.session_state["dash_honeypot"] = False
+            st.session_state["dash_smart_order"] = False
+            st.session_state["dash_adaptive"] = False
             st.session_state["preset_active"] = True
             st.rerun()
 
@@ -479,7 +495,7 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
 
         # scan mode
         st.subheader("Scan mode")
-        scan_mode = st.radio("Mode", list(SCAN_MODES.keys()))
+        scan_mode = st.radio("Mode", list(SCAN_MODES.keys()), key="dash_scan_mode")
         st.caption(SCAN_MODES.get(scan_mode, ""))
 
         # evasion sub-options — only visible in evasion mode
@@ -510,21 +526,23 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         c1, c2 = st.columns(2)
         with c1:
             banners = st.checkbox(
-                "Banners", value=False, help="Grab service banners and extract versions"
+                "Banners", key="dash_banners", help="Grab service banners and extract versions"
             )
-            os_detect = st.checkbox("OS (TTL)", value=False, help="Guess OS from TTL ping response")
+            os_detect = st.checkbox(
+                "OS (TTL)", key="dash_os_detect", help="Guess OS from TTL ping response"
+            )
             passive_os = st.checkbox(
                 "Passive OS",
-                value=False,
+                key="dash_passive_os",
                 help="TCP stack fingerprinting via SYN-ACK (needs root or Scapy)",
             )
         with c2:
             cve_lookup = st.checkbox(
-                "CVE lookup", value=False, help="NVD API lookup per open service"
+                "CVE lookup", key="dash_cve_lookup", help="NVD API lookup per open service"
             )
             honeypot = st.checkbox(
                 "Honeypot check",
-                value=False,
+                key="dash_honeypot",
                 help="Score the target for honeypot likelihood after scan",
             )
             include_closed = st.checkbox(
@@ -537,12 +555,12 @@ def render_sidebar() -> tuple[str, ScanOptions, bool]:
         with st.expander("Advanced"):
             smart_order = st.checkbox(
                 "Smart port order",
-                value=False,
+                key="dash_smart_order",
                 help="ML-based port prioritization — scans likely-open ports first (needs scikit-learn)",
             )
             adaptive = st.checkbox(
                 "Adaptive speed",
-                value=False,
+                key="dash_adaptive",
                 help="AIMD concurrency control: starts conservative, ramps up on stable networks",
             )
             timeout = st.slider("Timeout per port (s)", 0.1, 10.0, 1.0, 0.1, key="dash_timeout")
